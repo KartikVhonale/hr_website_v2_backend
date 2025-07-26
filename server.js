@@ -17,7 +17,17 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors()); // Enable CORS for frontend communication
+// Configure CORS with specific options
+app.use(cors({
+  origin: [
+    'http://localhost:5173', // Local frontend development
+    'https://hr-website-v2.vercel.app', // Replace with your frontend domain
+    process.env.FRONTEND_URL // Optional: configure via environment variable
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
