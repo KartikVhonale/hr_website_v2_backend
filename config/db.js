@@ -10,9 +10,7 @@ const connectDB = async () => {
         deprecationErrors: true,
       },
       retryWrites: true,
-      w: 'majority',
-      useNewUrlParser: true,
-      useUnifiedTopology: true
+      w: 'majority'
     });
 
     // Send a ping to confirm a successful connection
