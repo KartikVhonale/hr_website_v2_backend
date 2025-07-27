@@ -16,6 +16,25 @@ const JobSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please add a salary']
   },
+  ctc: {
+    type: String,
+    required: [true, 'Please add a CTC']
+  },
+  jobType: {
+    type: String,
+    enum: ['Full-time', 'Part-time', 'Contract', 'Internship'],
+    required: [true, 'Please specify the job type']
+  },
+  experienceLevel: {
+    type: String,
+    enum: ['Entry-level', 'Mid-level', 'Senior-level', 'Lead'],
+    required: [true, 'Please specify the experience level']
+  },
+  skills: {
+    type: [String],
+    required: true,
+    validate: [val => val.length > 0, 'Please add at least one skill']
+  },
   location: {
     type: String,
     required: [true, 'Please add a location']

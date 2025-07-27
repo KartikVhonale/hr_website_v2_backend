@@ -34,6 +34,10 @@ const UserSchema = new mongoose.Schema({
     enum: ['active', 'disabled'],
     default: 'active'
   },
+  isAuthorized: {
+    type: Boolean,
+    default: false
+  },
   company: {
     type: String
   },

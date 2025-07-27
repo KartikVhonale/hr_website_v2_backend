@@ -3,7 +3,7 @@ const login = require('./login');
 const logout = require('./logout');
 const { getProfile, updateProfile } = require('./profile');
 const { changePassword, resetPassword } = require('./password');
-const { getAllUsers, updateUserStatus, deleteUser, updateUser } = require('./admin');
+const { getAllUsers, updateUserStatus, deleteUser, updateUser, authorizeEmployer } = require('./admin');
 
 module.exports = {
   signup,
@@ -16,5 +16,6 @@ module.exports = {
   getAllUsers,
   updateUserStatus,
   deleteUser,
-  updateUser
+  updateUser,
+  authorizeEmployer
 };

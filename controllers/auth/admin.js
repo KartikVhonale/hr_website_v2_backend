@@ -115,9 +115,43 @@ const updateUser = async (req, res) => {
   }
 };
 
+const authorizeEmployer = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { isAuthorized } = req.body;
+
+    const user = await User.findById(userId);
+
+    if (!user || user.role !== 'employer') {
+      return res.status(404).json({
+        success: false,
+        message: 'Employer not found'
+      });
+    }
+
+    user.isAuthorized = isAuthorized;
+    user.updatedAt = Date.now();
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Employer authorization status updated to ${isAuthorized}`,
+      user
+    });
+
+  } catch (error) {
+    console.error('Authorize employer error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   updateUserStatus,
   deleteUser,
-  updateUser
+  updateUser,
+  authorizeEmployer
 };

@@ -10,7 +10,8 @@ const {
   getAllUsers,
   updateUserStatus,
   deleteUser,
-  updateUser
+  updateUser,
+  authorizeEmployer
 } = require('../controllers/auth');
 const { verifyToken, requireAdmin } = require('../middleware/auth-middleware');
 const router = express.Router();
@@ -31,5 +32,6 @@ router.put('/users/:userId/status', verifyToken, requireAdmin, updateUserStatus)
 router.delete('/users/:userId', verifyToken, requireAdmin, deleteUser);
 router.put('/users/:userId/reset-password', verifyToken, requireAdmin, resetPassword);
 router.put('/users/:userId', verifyToken, requireAdmin, updateUser);
+router.put('/users/:userId/authorize', verifyToken, requireAdmin, authorizeEmployer);
 
 module.exports = router;

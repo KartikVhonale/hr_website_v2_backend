@@ -23,6 +23,11 @@ const login = async (req, res) => {
 
     // Find user by email
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    
+    if (user) {
+      const userObj = user.toObject();
+      delete userObj.password;
+    }
 
     if (!user) {
       return res.status(401).json({
@@ -36,6 +41,14 @@ const login = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: 'Account is disabled. Please contact support.'
+      });
+    }
+
+    // Check if employer is authorized
+    if (user.role === 'employer' && !user.isAuthorized) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your account is not authorized yet. Please contact admin.'
       });
     }
 
@@ -55,15 +68,13 @@ const login = async (req, res) => {
 
     const token = generateToken(user._id, user.name, user.email, user.role);
 
+    // Find user by email and return all fields except password
+    const userToReturn = await User.findOne({ email: email.toLowerCase() });
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      },
+      user: userToReturn,
       token
     });
 
