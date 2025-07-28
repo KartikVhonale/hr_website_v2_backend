@@ -24,10 +24,9 @@ const ContactSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  status: {
-    type: String,
-    enum: ['open', 'resolved'],
-    default: 'open'
+  isResolved: {
+    type: Boolean,
+    default: false
   },
   createdAt: {
     type: Date,

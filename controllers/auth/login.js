@@ -48,7 +48,7 @@ const login = async (req, res) => {
     if (user.role === 'employer' && !user.isAuthorized) {
       return res.status(401).json({
         success: false,
-        message: 'Your account is not authorized yet. Please contact admin.'
+        message: 'Your account is not authorized yet. Please contact admin using contact form.'
       });
     }
 

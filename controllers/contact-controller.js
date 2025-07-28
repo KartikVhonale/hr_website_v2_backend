@@ -31,9 +31,11 @@ class ContactController {
         data: contact
       });
     } catch (error) {
+      console.error('Error creating contact:', error);
       res.status(500).json({
         success: false,
-        message: 'Server Error'
+        message: 'Server Error',
+        error: error.message
       });
     }
   }
@@ -43,23 +45,25 @@ class ContactController {
   // @access  Private (Admin)
   static async updateContactStatus(req, res) {
     try {
-      let contact = await Contact.findById(req.params.id);
+      const { id } = req.params;
+      const { isResolved } = req.body;
 
-      if (!contact) {
+      const updatedContact = await Contact.findByIdAndUpdate(
+        id,
+        { isResolved },
+        { new: true, runValidators: true }
+      );
+
+      if (!updatedContact) {
         return res.status(404).json({
           success: false,
           message: 'Contact submission not found'
         });
       }
 
-      contact = await Contact.findByIdAndUpdate(req.params.id, req.body, {
-        new: true,
-        runValidators: true
-      });
-
       res.status(200).json({
         success: true,
-        data: contact
+        data: updatedContact
       });
     } catch (error) {
       res.status(500).json({
@@ -74,7 +78,8 @@ class ContactController {
   // @access  Private (Admin)
   static async deleteContact(req, res) {
     try {
-      const contact = await Contact.findById(req.params.id);
+      const { id } = req.params;
+      const contact = await Contact.findByIdAndDelete(id);
 
       if (!contact) {
         return res.status(404).json({
@@ -82,8 +87,6 @@ class ContactController {
           message: 'Contact submission not found'
         });
       }
-
-      await contact.remove();
 
       res.status(200).json({
         success: true,

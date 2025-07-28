@@ -56,7 +56,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/jobs', jobRouter);
 app.use('/api/applications', applicationRouter);
 app.use('/api/articles', articleRouter);
-app.use('/api/contacts', contactRouter);
+app.use('/api/contact', contactRouter);
 app.use('/api/team', teamRouter);
 
 // Serve uploaded files

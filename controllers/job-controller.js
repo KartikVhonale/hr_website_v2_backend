@@ -139,6 +139,25 @@ class JobController {
       });
     }
   }
+
+  // @desc    Get all jobs for a specific employer
+  // @route   GET /api/jobs/employer/:employerId
+  // @access  Public
+  static async getJobsByEmployer(req, res) {
+    try {
+      const jobs = await Job.find({ employer: req.params.employerId }).populate('employer', 'name email');
+      res.status(200).json({
+        success: true,
+        count: jobs.length,
+        data: jobs
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Server Error'
+      });
+    }
+  }
 }
 
 module.exports = JobController;

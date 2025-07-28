@@ -18,4 +18,6 @@ router
   .put(verifyToken, JobController.updateJob)
   .delete(verifyToken, JobController.deleteJob);
 
+router.route('/employer/:employerId').get(JobController.getJobsByEmployer);
+
 module.exports = router;
