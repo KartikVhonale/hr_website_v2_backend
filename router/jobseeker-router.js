@@ -1,0 +1,85 @@
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const jobseekerController = require('../controllers/jobseeker-controller');
+const { verifyToken } = require('../middleware/auth-middleware');
+const { resumeStorage } = require('../config/cloudinary');
+
+// Profile routes
+router.get('/profile', verifyToken, jobseekerController.getJobseekerProfile);
+router.put('/profile', verifyToken, jobseekerController.updateJobseekerProfile);
+
+// Saved jobs routes
+router.get('/saved-jobs', verifyToken, jobseekerController.getSavedJobs);
+router.post('/saved-jobs/:jobId', verifyToken, jobseekerController.saveJob);
+router.delete('/saved-jobs/:jobId', verifyToken, jobseekerController.unsaveJob);
+
+// Applied jobs routes
+router.get('/applied-jobs', verifyToken, jobseekerController.getAppliedJobs);
+
+// Resume upload configuration using Cloudinary storage - PDF ONLY
+const resumeUpload = multer({
+    storage: resumeStorage, // Use the configured Cloudinary storage
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB limit for PDF files
+    },
+    fileFilter: (_req, file, cb) => {
+        console.log('File filter called with:', file);
+        console.log('File mimetype:', file.mimetype);
+        console.log('File originalname:', file.originalname);
+
+        // Only accept PDF files
+        if (file.mimetype === 'application/pdf') {
+            console.log('PDF file accepted:', file.originalname);
+            cb(null, true);
+        } else {
+            console.log('File type rejected. Only PDF files are allowed:', file.mimetype);
+            cb(new Error('Only PDF files are allowed. Please convert your document to PDF format.'), false);
+        }
+    }
+});
+
+// PDF upload to Cloudinary using configured storage
+router.post('/upload-resume', verifyToken, resumeUpload.single('resume'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                msg: 'No file uploaded'
+            });
+        }
+
+        console.log('PDF file uploaded to Cloudinary:', req.file);
+        console.log('Cloudinary result:', {
+            url: req.file.path,
+            public_id: req.file.filename,
+            original_name: req.file.originalname
+        });
+
+        // Prepare data for controller
+        req.cloudinaryResult = {
+            secure_url: req.file.path,
+            public_id: req.file.filename,
+            resource_type: 'image',
+            format: 'pdf',
+            bytes: req.file.size
+        };
+        req.originalFileName = req.file.originalname;
+
+        // Call the upload controller
+        await jobseekerController.uploadResume(req, res);
+
+    } catch (error) {
+        console.error('Resume upload error:', error);
+        return res.status(500).json({
+            success: false,
+            msg: 'Failed to upload PDF to cloud storage',
+            error: error.message
+        });
+    }
+});
+
+// Resume delete route
+router.delete('/resume', verifyToken, jobseekerController.deleteResume);
+
+module.exports = router;

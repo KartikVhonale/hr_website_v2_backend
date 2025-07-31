@@ -15,7 +15,28 @@ const storage = new CloudinaryStorage({
   }
 });
 
+// Resume storage configuration - PDF ONLY with public access
+const resumeStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'talentflow/resumes',
+    allowedFormats: ['pdf'], // Only PDF format allowed
+    resource_type: 'image', // Force image resource type for public access
+    format: 'pdf', // Explicitly set PDF format
+    access_mode: 'public', // Ensure public access
+    // Generate a unique filename WITHOUT extension (format=pdf will add it)
+    public_id: (_req, file) => {
+      const timestamp = Date.now();
+      const originalName = file.originalname
+        .split('.')[0]
+        .replace(/[^a-zA-Z0-9]/g, '_');
+      return `resume_${originalName}_${timestamp}`; // NO .pdf extension - format will add it
+    }
+  }
+});
+
 module.exports = {
   cloudinary,
-  storage
+  storage,
+  resumeStorage
 };

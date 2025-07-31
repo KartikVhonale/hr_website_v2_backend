@@ -112,6 +112,33 @@ class ApplicationController {
       });
     }
   }
+
+  // @desc    Get all applications for an employer
+  // @route   GET /api/applications/employer/:employerId
+  // @access  Private (Employer)
+  static async getApplicationsByEmployer(req, res) {
+    try {
+      // Find all jobs for the given employer
+      const jobs = await Job.find({ employer: req.params.employerId });
+      const jobIds = jobs.map(job => job._id);
+
+      // Find all applications for those jobs
+      const applications = await Application.find({ job: { $in: jobIds } })
+        .populate('job', 'title')
+        .populate('applicant', 'name email');
+
+      res.status(200).json({
+        success: true,
+        count: applications.length,
+        data: applications
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Server Error'
+      });
+    }
+  }
 }
 
 module.exports = ApplicationController;

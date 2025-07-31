@@ -11,6 +11,11 @@ const ApplicationSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  employer: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'User',
+    required: true
+  },
   status: {
     type: String,
     enum: ['applied', 'review', 'selected', 'rejected'],

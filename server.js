@@ -10,6 +10,10 @@ const articleRouter = require('./router/article-router');
 const contactRouter = require('./router/contact-router');
 const teamRouter = require('./router/team-router');
 const activityRouter = require('./router/activity-router');
+const userRouter = require('./router/user-router');
+const jobseekerRouter = require('./router/jobseeker-router');
+const employerRouter = require('./router/employer-router');
+const adminRouter = require('./router/admin-router');
 
 // Connect to database
 connectDB();
@@ -60,6 +64,10 @@ app.use('/api/articles', articleRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/team', teamRouter);
 app.use('/api/activity', activityRouter);
+app.use('/api/users', userRouter);
+app.use('/api/jobseeker', jobseekerRouter);
+app.use('/api/employer', employerRouter);
+app.use('/api/admin', adminRouter);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, '/uploads')));

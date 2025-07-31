@@ -6,7 +6,22 @@ class JobController {
   // @access  Public
   static async getAllJobs(req, res) {
     try {
-      const jobs = await Job.find().populate('employer', 'name email');
+      const { search, location, jobType } = req.query;
+      const queryObject = {};
+
+      if (search) {
+        queryObject.title = { $regex: search, $options: 'i' };
+      }
+
+      if (location) {
+        queryObject.location = { $regex: location, $options: 'i' };
+      }
+
+      if (jobType) {
+        queryObject.jobType = jobType;
+      }
+
+      const jobs = await Job.find(queryObject).populate('employer', 'name email');
       res.status(200).json({
         success: true,
         count: jobs.length,

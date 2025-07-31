@@ -26,9 +26,6 @@ const UserSchema = new mongoose.Schema({
     minlength: 6,
     select: false
   },
-  phone: {
-    type: String
-  },
   status: {
     type: String,
     enum: ['active', 'disabled'],
@@ -38,26 +35,27 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  company: {
-    type: String
-  },
-  skills: {
-    type: [String]
-  },
-  jobTitle: {
-    type: String
-  },
   lastLogin: {
     type: Date
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  profilePicture: {
+    type: String // URL to profile picture
   },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationToken: {
+    type: String
+  },
+  passwordResetToken: {
+    type: String
+  },
+  passwordResetExpires: {
+    type: Date
   }
+}, {
+  timestamps: true
 });
 
 // Encrypt password using bcrypt

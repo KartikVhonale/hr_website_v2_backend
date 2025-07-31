@@ -12,4 +12,8 @@ router
   .route('/:id')
   .put(verifyToken, ApplicationController.updateApplicationStatus);
 
+router
+  .route('/employer/:employerId')
+  .get(verifyToken, ApplicationController.getApplicationsByEmployer);
+
 module.exports = router;

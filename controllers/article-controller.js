@@ -269,6 +269,25 @@ class ArticleController {
       });
     }
   }
+
+  // @desc    Get all articles for an author
+  // @route   GET /api/articles/author/:authorId
+  // @access  Public
+  static async getArticlesByAuthor(req, res) {
+    try {
+      const articles = await Article.find({ author: req.params.authorId }).populate('author', 'name');
+      res.status(200).json({
+        success: true,
+        count: articles.length,
+        data: articles
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Server Error'
+      });
+    }
+  }
 }
 
 module.exports = ArticleController;

@@ -23,4 +23,6 @@ router.put('/:id/dislike', verifyToken, ArticleController.dislikeArticle);
 
 router.get('/categories', ArticleController.getCategories);
 
+router.get('/author/:authorId', ArticleController.getArticlesByAuthor);
+
 module.exports = router;
