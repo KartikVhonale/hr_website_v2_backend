@@ -1,32 +1,57 @@
 const User = require('../models/User');
+const Employer = require('../models/Employer');
+const Jobseeker = require('../models/Jobseeker');
 const Job = require('../models/Job');
 const Application = require('../models/Application');
 const { NotFoundError } = require('../errors');
 
 const getSavedCandidates = async (req, res) => {
   const { userId } = req.user;
-  
-  const user = await User.findById(userId).populate({
+
+  // Find the employer profile for this user
+  let employer = await Employer.findOne({ userId }).populate({
     path: 'savedCandidates',
-    select: '-password -__v',
     populate: {
-      path: 'applications',
-      match: { employer: userId },
-      select: 'status notes'
+      path: 'userId',
+      select: 'name email'
     }
   });
 
-  if (!user) {
-    throw new NotFoundError('User not found');
+  // If employer profile doesn't exist, create one
+  if (!employer) {
+    // Get user info for default company name
+    const user = await User.findById(userId);
+    employer = await Employer.create({
+      userId,
+      companyName: user?.name ? `${user.name}'s Company` : 'My Company',
+      savedCandidates: []
+    });
   }
+
+  // Get applications for each saved candidate
+  const candidatesWithStatus = await Promise.all(
+    employer.savedCandidates.map(async (candidate) => {
+      const application = await Application.findOne({
+        jobseeker: candidate._id,
+        employer: userId
+      }).select('status notes');
+
+      return {
+        _id: candidate._id,
+        name: candidate.userId?.name || 'Unknown',
+        email: candidate.userId?.email || 'Unknown',
+        jobTitle: candidate.jobTitle,
+        location: candidate.location,
+        skills: candidate.skills,
+        status: application?.status || 'new',
+        notes: application?.notes || ''
+      };
+    })
+  );
 
   res.json({
     success: true,
-    data: user.savedCandidates.map(candidate => ({
-      ...candidate.toObject(),
-      status: candidate.applications[0]?.status || 'new',
-      notes: candidate.applications[0]?.notes || ''
-    }))
+    data: candidatesWithStatus
   });
 };
 
@@ -34,14 +59,51 @@ const removeSavedCandidate = async (req, res) => {
   const { userId } = req.user;
   const { candidateId } = req.params;
 
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { $pull: { savedCandidates: candidateId } },
-    { new: true }
-  );
+  let employer = await Employer.findOne({ userId });
 
-  if (!user) {
-    throw new NotFoundError('User not found');
+  // If employer profile doesn't exist, create one
+  if (!employer) {
+    // Get user info for default company name
+    const user = await User.findById(userId);
+    employer = await Employer.create({
+      userId,
+      companyName: user?.name ? `${user.name}'s Company` : 'My Company',
+      savedCandidates: []
+    });
+  } else {
+    // Remove the candidate from saved list
+    employer = await Employer.findOneAndUpdate(
+      { userId },
+      { $pull: { savedCandidates: candidateId } },
+      { new: true }
+    );
+  }
+
+  res.json({ success: true });
+};
+
+const saveCandidate = async (req, res) => {
+  const { userId } = req.user;
+  const { candidateId } = req.params;
+
+  let employer = await Employer.findOne({ userId });
+
+  // If employer profile doesn't exist, create one
+  if (!employer) {
+    // Get user info for default company name
+    const user = await User.findById(userId);
+    employer = await Employer.create({
+      userId,
+      companyName: user?.name ? `${user.name}'s Company` : 'My Company',
+      savedCandidates: [candidateId]
+    });
+  } else {
+    // Add candidate to saved list if not already saved
+    employer = await Employer.findOneAndUpdate(
+      { userId },
+      { $addToSet: { savedCandidates: candidateId } },
+      { new: true }
+    );
   }
 
   res.json({ success: true });
@@ -78,16 +140,21 @@ const updateCandidateNotes = async (req, res) => {
 // Saved Jobs functions for jobseekers
 const getSavedJobs = async (req, res) => {
   const { userId } = req.user;
-  
-  const user = await User.findById(userId).populate('savedJobs');
-  
-  if (!user) {
-    throw new NotFoundError('User not found');
+
+  // Find the jobseeker profile for this user
+  let jobseeker = await Jobseeker.findOne({ userId }).populate('savedJobs');
+
+  // If jobseeker profile doesn't exist, create one
+  if (!jobseeker) {
+    jobseeker = await Jobseeker.create({
+      userId,
+      savedJobs: []
+    });
   }
-  
+
   res.json({
     success: true,
-    data: user.savedJobs
+    data: jobseeker.savedJobs || []
   });
 };
 
@@ -101,15 +168,21 @@ const saveJob = async (req, res) => {
     throw new NotFoundError('Job not found');
   }
   
-  // Add job to user's saved jobs if not already saved
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { $addToSet: { savedJobs: jobId } },
-    { new: true }
-  );
-  
-  if (!user) {
-    throw new NotFoundError('User not found');
+  // Add job to jobseeker's saved jobs if not already saved
+  let jobseeker = await Jobseeker.findOne({ userId });
+
+  // If jobseeker profile doesn't exist, create one
+  if (!jobseeker) {
+    jobseeker = await Jobseeker.create({
+      userId,
+      savedJobs: [jobId]
+    });
+  } else {
+    jobseeker = await Jobseeker.findOneAndUpdate(
+      { userId },
+      { $addToSet: { savedJobs: jobId } },
+      { new: true }
+    );
   }
   
   res.json({
@@ -121,17 +194,24 @@ const saveJob = async (req, res) => {
 const unsaveJob = async (req, res) => {
   const { userId } = req.user;
   const { jobId } = req.params;
-  
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { $pull: { savedJobs: jobId } },
-    { new: true }
-  );
-  
-  if (!user) {
-    throw new NotFoundError('User not found');
+
+  let jobseeker = await Jobseeker.findOne({ userId });
+
+  // If jobseeker profile doesn't exist, create one (though this is unlikely for unsave)
+  if (!jobseeker) {
+    jobseeker = await Jobseeker.create({
+      userId,
+      savedJobs: []
+    });
+  } else {
+    // Remove job from saved list
+    jobseeker = await Jobseeker.findOneAndUpdate(
+      { userId },
+      { $pull: { savedJobs: jobId } },
+      { new: true }
+    );
   }
-  
+
   res.json({ success: true });
 };
 
@@ -228,8 +308,8 @@ const getNotifications = async (req, res) => {
 };
 
 const markNotificationAsRead = async (req, res) => {
-  const { id } = req.params;
-  
+  // const { id } = req.params; // Commented out unused parameter
+
   // In a real implementation, you would update the notification in the database
   res.json({
     success: true,
@@ -238,8 +318,8 @@ const markNotificationAsRead = async (req, res) => {
 };
 
 const deleteNotification = async (req, res) => {
-  const { id } = req.params;
-  
+  // const { id } = req.params; // Commented out unused parameter
+
   // In a real implementation, you would delete the notification from the database
   res.json({
     success: true,
@@ -249,6 +329,7 @@ const deleteNotification = async (req, res) => {
 
 module.exports = {
   getSavedCandidates,
+  saveCandidate,
   removeSavedCandidate,
   updateCandidateStatus,
   updateCandidateNotes,

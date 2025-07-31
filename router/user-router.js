@@ -5,6 +5,7 @@ const router = express.Router();
 
 // Saved candidates endpoints (for employers)
 router.get('/saved-candidates', verifyToken, UserController.getSavedCandidates);
+router.post('/save-candidate/:candidateId', verifyToken, UserController.saveCandidate);
 router.delete('/save-candidate/:candidateId', verifyToken, UserController.removeSavedCandidate);
 router.put('/update-candidate-status/:candidateId', verifyToken, UserController.updateCandidateStatus);
 router.put('/update-candidate-notes/:candidateId', verifyToken, UserController.updateCandidateNotes);

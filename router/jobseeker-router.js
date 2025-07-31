@@ -82,4 +82,55 @@ router.post('/upload-resume', verifyToken, resumeUpload.single('resume'), async 
 // Resume delete route
 router.delete('/resume', verifyToken, jobseekerController.deleteResume);
 
+// Resume proxy route to serve PDFs with proper headers
+router.get('/resume/view/:userId?', verifyToken, async (req, res) => {
+    try {
+        const userId = req.params.userId || req.user.userId || req.user.id;
+        console.log('Serving resume for user:', userId);
+
+        const Jobseeker = require('../models/Jobseeker');
+        const jobseekerProfile = await Jobseeker.findOne({ userId });
+
+        if (!jobseekerProfile || !jobseekerProfile.resume || !jobseekerProfile.resume.url) {
+            return res.status(404).json({
+                success: false,
+                msg: 'Resume not found'
+            });
+        }
+
+        const resumeUrl = jobseekerProfile.resume.url;
+        console.log('Proxying resume URL:', resumeUrl);
+
+        // Fetch the PDF from Cloudinary with authentication
+        const axios = require('axios');
+        const response = await axios.get(resumeUrl, {
+            responseType: 'stream',
+            headers: {
+                'User-Agent': 'TalentFlow-Backend/1.0'
+            }
+        });
+
+        // Set proper headers for PDF viewing or downloading
+        const isDownload = req.query.download === 'true';
+        const filename = jobseekerProfile.resume.original_name || 'resume.pdf';
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', isDownload ?
+            `attachment; filename="${filename}"` :
+            `inline; filename="${filename}"`);
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+
+        // Pipe the PDF stream to the response
+        response.data.pipe(res);
+
+    } catch (error) {
+        console.error('Resume proxy error:', error);
+        res.status(500).json({
+            success: false,
+            msg: 'Failed to serve resume',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

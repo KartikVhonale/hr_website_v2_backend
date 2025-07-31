@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const Employer = require('../models/Employer');
+const Jobseeker = require('../models/Jobseeker');
 const Job = require('../models/Job');
 const Application = require('../models/Application');
 
@@ -99,8 +101,28 @@ const updateApplicationStatus = async (req, res) => {
 // @access  Private (Employer)
 const getSavedCandidates = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).populate('savedCandidates', 'name email skills');
-        res.json(user.savedCandidates);
+        const employer = await Employer.findOne({ userId: req.user.id }).populate({
+            path: 'savedCandidates',
+            populate: {
+                path: 'userId',
+                select: 'name email'
+            }
+        });
+
+        if (!employer) {
+            return res.status(404).json({ message: 'Employer profile not found' });
+        }
+
+        const candidatesWithDetails = employer.savedCandidates.map(candidate => ({
+            _id: candidate._id,
+            name: candidate.userId?.name || 'Unknown',
+            email: candidate.userId?.email || 'Unknown',
+            jobTitle: candidate.jobTitle,
+            skills: candidate.skills,
+            location: candidate.location
+        }));
+
+        res.json(candidatesWithDetails);
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
@@ -112,21 +134,25 @@ const getSavedCandidates = async (req, res) => {
 // @access  Private (Employer)
 const saveCandidate = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id);
-        const candidate = await User.findById(req.params.candidateId);
+        const employer = await Employer.findOne({ userId: req.user.id });
+        const jobseeker = await Jobseeker.findById(req.params.candidateId);
 
-        if (!candidate || candidate.role !== 'jobseeker') {
+        if (!jobseeker) {
             return res.status(404).json({ msg: 'Candidate not found' });
         }
 
-        if (user.savedCandidates.includes(req.params.candidateId)) {
+        if (!employer) {
+            return res.status(404).json({ msg: 'Employer profile not found' });
+        }
+
+        if (employer.savedCandidates.includes(req.params.candidateId)) {
             return res.status(400).json({ msg: 'Candidate already saved' });
         }
 
-        user.savedCandidates.push(req.params.candidateId);
-        await user.save();
+        employer.savedCandidates.push(req.params.candidateId);
+        await employer.save();
 
-        res.json(user.savedCandidates);
+        res.json({ success: true, message: 'Candidate saved successfully' });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
@@ -138,23 +164,22 @@ const saveCandidate = async (req, res) => {
 // @access  Private (Employer)
 const unsaveCandidate = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id);
-        const candidate = await User.findById(req.params.candidateId);
+        const employer = await Employer.findOne({ userId: req.user.id });
 
-        if (!candidate) {
-            return res.status(404).json({ msg: 'Candidate not found' });
+        if (!employer) {
+            return res.status(404).json({ msg: 'Employer profile not found' });
         }
 
-        if (!user.savedCandidates.includes(req.params.candidateId)) {
+        if (!employer.savedCandidates.includes(req.params.candidateId)) {
             return res.status(400).json({ msg: 'Candidate not saved' });
         }
 
-        user.savedCandidates = user.savedCandidates.filter(
+        employer.savedCandidates = employer.savedCandidates.filter(
             (candidateId) => candidateId.toString() !== req.params.candidateId
         );
-        await user.save();
+        await employer.save();
 
-        res.json(user.savedCandidates);
+        res.json({ success: true, message: 'Candidate removed from saved list' });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
