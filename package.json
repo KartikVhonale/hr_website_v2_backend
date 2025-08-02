@@ -10,9 +10,7 @@
     "dev": "nodemon server.js",
     "check": "node startup-check.js",
     "test-env": "node debug-env.js",
-    "test-db": "node test-connection.js",
-    "deploy-check": "node deployment-check.js",
-    "postinstall": "node deployment-check.js"
+    "test-db": "node test-connection.js"
   },
   "keywords": [],
   "author": "",
