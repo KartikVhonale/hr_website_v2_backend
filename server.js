@@ -1,17 +1,5 @@
-// Load environment variables with error checking
-const dotenvResult = require('dotenv').config();
-if (dotenvResult.error) {
-  console.error('❌ Error loading .env file:', dotenvResult.error.message);
-  console.error('💡 Make sure .env file exists in the backend directory');
-
-  // Only exit in development, not in production (Render sets env vars directly)
-  if (process.env.NODE_ENV !== 'production') {
-    console.error('🚫 Exiting in development mode due to missing .env file');
-    process.exit(1);
-  } else {
-    console.log('🌐 Running in production mode - using platform environment variables');
-  }
-}
+// Use environment variables directly (no .env file loading)
+// Environment variables are set by the deployment platform (Render)
 const path = require('path');
 const express = require('express');
 const cors = require('cors');

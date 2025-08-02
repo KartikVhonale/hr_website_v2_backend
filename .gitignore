@@ -34,6 +34,13 @@ coverage
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# Test files and directories
+Z-Test/
+*test*.js
+debug-env.js
+test-connection.js
+startup-check.js
+
 # Misc
 .DS_Store
 .idea/

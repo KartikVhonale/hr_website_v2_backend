@@ -1,11 +1,3 @@
-// Load environment variables (production-friendly)
-const dotenvResult = require('dotenv').config();
-if (dotenvResult.error && process.env.NODE_ENV !== 'production') {
-  console.error('❌ Error loading .env file:', dotenvResult.error.message);
-} else if (process.env.NODE_ENV === 'production') {
-  console.log('🌐 Running in production mode - using platform environment variables');
-}
-
 console.log('🔍 Environment Variable Test');
 console.log('============================');
 
