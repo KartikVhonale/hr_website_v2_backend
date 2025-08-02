@@ -8,6 +8,11 @@ console.log(`MONGODB_URI: ${process.env.MONGODB_URI || 'undefined'}`);
 console.log('\n2️⃣ Loading dotenv...');
 const dotenvResult = require('dotenv').config();
 
+// Check if we're in production mode
+if (process.env.NODE_ENV === 'production') {
+  console.log('🌐 Running in production mode - using platform environment variables');
+}
+
 console.log('\n3️⃣ Dotenv result:');
 console.log('Error:', dotenvResult.error || 'none');
 console.log('Parsed keys:', dotenvResult.parsed ? Object.keys(dotenvResult.parsed) : 'none');

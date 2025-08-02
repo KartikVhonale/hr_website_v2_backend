@@ -67,7 +67,12 @@ const dotenv = require('dotenv');
 const result = dotenv.config();
 
 if (result.error) {
-  console.error('❌ Error loading .env:', result.error.message);
+  if (process.env.NODE_ENV === 'production') {
+    console.log('🌐 Running in production mode - using platform environment variables');
+    console.log('ℹ️  .env file not needed in production');
+  } else {
+    console.error('❌ Error loading .env:', result.error.message);
+  }
 } else {
   console.log('✅ Environment variables loaded');
   if (result.parsed) {
