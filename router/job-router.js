@@ -1,6 +1,8 @@
 const express = require('express');
 const JobController = require('../controllers/job-controller');
 const { verifyToken, requireAdmin, requireEmployer } = require('../middleware/auth-middleware');
+const { jobValidations, queryValidations } = require('../middleware/validation-middleware');
+const { jobCreationLimiter } = require('../middleware/security-middleware');
 const applicationRouter = require('./application-router');
 const router = express.Router();
 
@@ -9,14 +11,14 @@ router.use('/:jobId/applications', applicationRouter);
 
 router
   .route('/')
-  .get(JobController.getAllJobs)
-  .post(verifyToken, requireEmployer, JobController.createJob);
+  .get(queryValidations.jobSearch, JobController.getAllJobs)
+  .post(verifyToken, jobCreationLimiter, jobValidations.create, JobController.createJob);
 
 router
   .route('/:id')
-  .get(JobController.getJob)
-  .put(verifyToken, JobController.updateJob)
-  .delete(verifyToken, JobController.deleteJob);
+  .get(jobValidations.getById, JobController.getJob)
+  .put(verifyToken, jobValidations.update, JobController.updateJob)
+  .delete(verifyToken, jobValidations.getById, JobController.deleteJob);
 
 router.route('/employer/:employerId').get(JobController.getJobsByEmployer);
 

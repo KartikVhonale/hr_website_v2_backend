@@ -1,8 +1,34 @@
-require('dotenv').config();
+// Load environment variables with error checking
+const dotenvResult = require('dotenv').config();
+if (dotenvResult.error) {
+  console.error('❌ Error loading .env file:', dotenvResult.error.message);
+  console.error('💡 Make sure .env file exists in the backend directory');
+  process.exit(1);
+}
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
+const { validateAllConfigurations } = require('./config/env-validation');
+
+// Security middleware imports
+const {
+  generalLimiter,
+  securityHeaders,
+  mongoSanitization,
+  parameterPollutionPrevention,
+  requestSizeLimit,
+  securityLogger,
+  corsSecurityCheck
+} = require('./middleware/security-middleware');
+const { sanitizeInput } = require('./middleware/validation-middleware');
+const {
+  globalErrorHandler,
+  notFound,
+  handleFileUploadError,
+  handleUnhandledRejection,
+  handleUncaughtException
+} = require('./middleware/error-middleware');
 const authRouter = require('./router/auth-router');
 const jobRouter = require('./router/job-router');
 const applicationRouter = require('./router/application-router');
@@ -14,6 +40,14 @@ const userRouter = require('./router/user-router');
 const jobseekerRouter = require('./router/jobseeker-router');
 const employerRouter = require('./router/employer-router');
 const adminRouter = require('./router/admin-router');
+const notificationRouter = require('./router/notification-router');
+
+// Validate environment configuration
+validateAllConfigurations();
+
+// Handle uncaught exceptions and unhandled rejections
+handleUncaughtException();
+handleUnhandledRejection();
 
 // Connect to database
 connectDB();
@@ -21,20 +55,44 @@ connectDB();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware
+// Security Middleware (applied first)
+app.use(securityHeaders); // Security headers
+app.use(securityLogger); // Security logging
+app.use(corsSecurityCheck); // CORS security check
+app.use(requestSizeLimit); // Request size limiting
+
 // Configure CORS with specific options
 app.use(cors({
   origin: [
     'http://localhost:5173', // Local frontend development
     'https://hr-website-v2.vercel.app', // Replace with your frontend domain
     process.env.FRONTEND_URL // Optional: configure via environment variable
-  ],
+  ].filter(Boolean), // Remove undefined values
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 }));
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+
+// Body parsing middleware with size limits
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    // Store raw body for webhook verification if needed
+    req.rawBody = buf;
+  }
+}));
+app.use(express.urlencoded({
+  extended: true,
+  limit: '10mb',
+  parameterLimit: 20 // Limit number of parameters
+}));
+
+// Security middleware (applied after body parsing)
+app.use(mongoSanitization); // Prevent NoSQL injection
+app.use(parameterPollutionPrevention); // Prevent parameter pollution
+app.use(sanitizeInput); // XSS protection
+app.use(generalLimiter); // General rate limiting
 
 // Routes
 app.get('/', (req, res) => {
@@ -68,19 +126,10 @@ app.use('/api/users', userRouter);
 app.use('/api/jobseeker', jobseekerRouter);
 app.use('/api/employer', employerRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/notifications', notificationRouter);
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    success: false,
-    message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
-  });
-});
 
 // Serve frontend
 if (process.env.NODE_ENV === 'production') {
@@ -95,13 +144,14 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found'
-  });
-});
+// File upload error handling
+app.use(handleFileUploadError);
+
+// 404 handler for undefined routes
+app.use(notFound);
+
+// Global error handling middleware (must be last)
+app.use(globalErrorHandler);
 
 app.listen(port, () => {
   console.log(`TalentFlow API Server listening on port ${port}`);

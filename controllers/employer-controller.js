@@ -3,17 +3,26 @@ const Employer = require('../models/Employer');
 const Jobseeker = require('../models/Jobseeker');
 const Job = require('../models/Job');
 const Application = require('../models/Application');
+const Article = require('../models/Article');
 
 // @desc    Get employer profile
 // @route   GET /api/employer/profile
 // @access  Private (Employer)
 const getEmployerProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select('-password');
-        res.json(user);
+        const userId = req.user.userId || req.user.id;
+        const user = await User.findById(userId).select('-password');
+
+        res.status(200).json({
+            success: true,
+            data: user
+        });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error('Get employer profile error:', err.message);
+        res.status(500).json({
+            success: false,
+            message: 'Server Error'
+        });
     }
 };
 
@@ -26,16 +35,20 @@ const updateEmployerProfile = async (req, res) => {
     const profileFields = { name, email, phone, company };
 
     try {
-        let user = await User.findById(req.user.id);
+        const userId = req.user.userId || req.user.id;
+        let user = await User.findById(userId);
 
         if (user) {
             // Update
             user = await User.findByIdAndUpdate(
-                req.user.id,
+                userId,
                 { $set: profileFields },
                 { new: true }
             );
-            return res.json(user);
+            return res.status(200).json({
+                success: true,
+                data: user
+            });
         }
 
         res.status(404).json({ msg: 'User not found' });
@@ -50,11 +63,23 @@ const updateEmployerProfile = async (req, res) => {
 // @access  Private (Employer)
 const getPostedJobs = async (req, res) => {
     try {
-        const jobs = await Job.find({ employer: req.user.id });
-        res.json(jobs);
+        const employerId = req.user.userId || req.user.id;
+        console.log('Fetching jobs for employer ID:', employerId);
+
+        const jobs = await Job.find({ employer: employerId }).sort({ createdAt: -1 });
+        console.log('Found jobs:', jobs.length);
+
+        res.status(200).json({
+            success: true,
+            count: jobs.length,
+            data: jobs
+        });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error('Get posted jobs error:', err.message);
+        res.status(500).json({
+            success: false,
+            message: 'Server Error'
+        });
     }
 };
 
@@ -101,7 +126,8 @@ const updateApplicationStatus = async (req, res) => {
 // @access  Private (Employer)
 const getSavedCandidates = async (req, res) => {
     try {
-        const employer = await Employer.findOne({ userId: req.user.id }).populate({
+        const userId = req.user.userId || req.user.id;
+        const employer = await Employer.findOne({ userId: userId }).populate({
             path: 'savedCandidates',
             populate: {
                 path: 'userId',
@@ -134,7 +160,8 @@ const getSavedCandidates = async (req, res) => {
 // @access  Private (Employer)
 const saveCandidate = async (req, res) => {
     try {
-        const employer = await Employer.findOne({ userId: req.user.id });
+        const userId = req.user.userId || req.user.id;
+        const employer = await Employer.findOne({ userId: userId });
         const jobseeker = await Jobseeker.findById(req.params.candidateId);
 
         if (!jobseeker) {
@@ -164,7 +191,8 @@ const saveCandidate = async (req, res) => {
 // @access  Private (Employer)
 const unsaveCandidate = async (req, res) => {
     try {
-        const employer = await Employer.findOne({ userId: req.user.id });
+        const userId = req.user.userId || req.user.id;
+        const employer = await Employer.findOne({ userId: userId });
 
         if (!employer) {
             return res.status(404).json({ msg: 'Employer profile not found' });
@@ -187,6 +215,265 @@ const unsaveCandidate = async (req, res) => {
 };
 
 
+// @desc    Get employer dashboard data
+// @route   GET /api/employer/dashboard
+// @access  Private (Employer)
+const getDashboardData = async (req, res) => {
+    try {
+        const employerId = req.user.userId || req.user.id;
+
+        // OPTIMIZED: Single query to get all employer jobs first
+        const employerJobs = await Job.find({ employer: employerId })
+            .select('_id title status createdAt')
+            .sort({ createdAt: -1 });
+
+        const jobIds = employerJobs.map(job => job._id);
+
+        // OPTIMIZED: Parallel execution with reduced queries
+        const [
+            applications,
+            savedCandidatesData,
+            articles
+        ] = await Promise.all([
+            // Get all applications for employer's jobs
+            Application.find({ job: { $in: jobIds } })
+                .populate('job', 'title')
+                .populate('applicant', 'name email')
+                .sort({ createdAt: -1 })
+                .limit(10),
+
+            // Get employer profile with saved candidates
+            Employer.findOne({ userId: employerId })
+                .populate({
+                    path: 'savedCandidates',
+                    select: 'name email jobTitle',
+                    options: { limit: 5 }
+                }),
+
+            // Get recent articles if employer is also an author
+            Article.find({ author: employerId })
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .select('title createdAt status')
+        ]);
+
+        // Calculate stats from fetched data (no additional DB queries)
+        const stats = {
+            totalJobs: employerJobs.length,
+            activeJobs: employerJobs.filter(job => job.status === 'approved').length,
+            pendingJobs: employerJobs.filter(job => job.status === 'pending').length,
+            totalApplications: applications.length,
+            savedCandidates: savedCandidatesData?.savedCandidates?.length || 0,
+            recentApplications: applications.filter(app => {
+                const dayAgo = new Date();
+                dayAgo.setDate(dayAgo.getDate() - 1);
+                return new Date(app.createdAt) > dayAgo;
+            }).length
+        };
+
+        // Comprehensive dashboard data in single response
+        const dashboardData = {
+            stats,
+            recentJobs: employerJobs.slice(0, 5),
+            recentApplications: applications.slice(0, 5),
+            savedCandidates: savedCandidatesData?.savedCandidates || [],
+            recentArticles: articles || []
+        };
+
+        res.status(200).json({
+            success: true,
+            data: dashboardData,
+            message: 'Dashboard data retrieved successfully'
+        });
+    } catch (error) {
+        console.error('Get employer dashboard data error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch dashboard data'
+        });
+    }
+};
+
+// @desc    Get employer statistics
+// @route   GET /api/employer/stats
+// @access  Private (Employer)
+const getEmployerStats = async (req, res) => {
+    try {
+        const employerId = req.user.userId || req.user.id;
+
+        const [
+            totalJobs,
+            activeJobs,
+            expiredJobs,
+            totalApplications,
+            pendingApplications,
+            reviewedApplications,
+            hiredApplications
+        ] = await Promise.all([
+            Job.countDocuments({ employer: employerId }),
+            Job.countDocuments({ employer: employerId, status: 'active' }),
+            Job.countDocuments({ employer: employerId, status: 'expired' }),
+            Application.countDocuments({
+                job: { $in: await Job.find({ employer: employerId }).select('_id') }
+            }),
+            Application.countDocuments({
+                job: { $in: await Job.find({ employer: employerId }).select('_id') },
+                status: 'pending'
+            }),
+            Application.countDocuments({
+                job: { $in: await Job.find({ employer: employerId }).select('_id') },
+                status: 'reviewed'
+            }),
+            Application.countDocuments({
+                job: { $in: await Job.find({ employer: employerId }).select('_id') },
+                status: 'hired'
+            })
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                jobs: {
+                    total: totalJobs,
+                    active: activeJobs,
+                    expired: expiredJobs
+                },
+                applications: {
+                    total: totalApplications,
+                    pending: pendingApplications,
+                    reviewed: reviewedApplications,
+                    hired: hiredApplications
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Get employer stats error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch employer statistics'
+        });
+    }
+};
+
+// @desc    Search candidates
+// @route   GET /api/employer/candidates
+// @access  Private (Employer)
+const searchCandidates = async (req, res) => {
+    try {
+        const {
+            q = '',
+            skills,
+            experience,
+            location,
+            education,
+            page = 1,
+            limit = 10,
+            sortBy = 'relevance',
+            sortOrder = 'desc'
+        } = req.query;
+
+        // Build aggregation pipeline
+        const pipeline = [
+            {
+                $lookup: {
+                    from: 'jobseekers',
+                    localField: '_id',
+                    foreignField: 'userId',
+                    as: 'jobseekerProfile'
+                }
+            },
+            {
+                $match: {
+                    role: 'jobseeker',
+                    status: 'active',
+                    jobseekerProfile: { $ne: [] }
+                }
+            }
+        ];
+
+        // Add search filters
+        const matchConditions = {};
+
+        if (q) {
+            matchConditions.$or = [
+                { name: { $regex: q, $options: 'i' } },
+                { email: { $regex: q, $options: 'i' } },
+                { 'jobseekerProfile.jobTitle': { $regex: q, $options: 'i' } }
+            ];
+        }
+
+        if (skills) {
+            const skillsArray = skills.split(',');
+            matchConditions['jobseekerProfile.skills'] = { $in: skillsArray };
+        }
+
+        if (location) {
+            matchConditions['jobseekerProfile.location'] = { $regex: location, $options: 'i' };
+        }
+
+        if (experience) {
+            matchConditions['jobseekerProfile.experience'] = { $exists: true, $ne: [] };
+        }
+
+        if (education) {
+            matchConditions['jobseekerProfile.education'] = { $exists: true, $ne: [] };
+        }
+
+        if (Object.keys(matchConditions).length > 0) {
+            pipeline.push({ $match: matchConditions });
+        }
+
+        // Add sorting
+        const sortOptions = {};
+        if (sortBy === 'relevance') {
+            sortOptions.createdAt = -1;
+        } else {
+            sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+        }
+        pipeline.push({ $sort: sortOptions });
+
+        // Add pagination
+        pipeline.push({ $skip: (page - 1) * limit });
+        pipeline.push({ $limit: parseInt(limit) });
+
+        // Project fields
+        pipeline.push({
+            $project: {
+                name: 1,
+                email: 1,
+                profilePicture: 1,
+                createdAt: 1,
+                jobseekerProfile: 1
+            }
+        });
+
+        const candidates = await User.aggregate(pipeline);
+
+        // Get total count for pagination
+        const countPipeline = pipeline.slice(0, -3); // Remove sort, skip, limit, project
+        countPipeline.push({ $count: 'total' });
+        const countResult = await User.aggregate(countPipeline);
+        const total = countResult[0]?.total || 0;
+
+        res.status(200).json({
+            success: true,
+            data: candidates,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        console.error('Search candidates error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to search candidates'
+        });
+    }
+};
+
 module.exports = {
     getEmployerProfile,
     updateEmployerProfile,
@@ -196,4 +483,7 @@ module.exports = {
     getSavedCandidates,
     saveCandidate,
     unsaveCandidate,
+    getDashboardData,
+    getEmployerStats,
+    searchCandidates
 };

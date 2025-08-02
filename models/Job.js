@@ -12,10 +12,6 @@ const JobSchema = new mongoose.Schema({
     required: [true, 'Please add a description'],
     maxlength: [1000, 'Description can not be more than 1000 characters']
   },
-  salary: {
-    type: String,
-    required: [true, 'Please add a salary']
-  },
   ctc: {
     type: String,
     required: [true, 'Please add a CTC']

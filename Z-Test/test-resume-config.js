@@ -1,6 +1,6 @@
 // Test the resume upload configuration
 
-const { resumeStorage } = require('./config/cloudinary');
+const { resumeStorage } = require('../config/cloudinary');
 
 console.log('=== RESUME UPLOAD CONFIGURATION TEST ===\n');
 

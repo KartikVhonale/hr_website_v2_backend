@@ -327,6 +327,170 @@ const deleteNotification = async (req, res) => {
   });
 };
 
+// @desc    Search users/candidates
+// @route   GET /api/users/search
+// @access  Private (Admin/Employer)
+const searchUsers = async (req, res) => {
+  try {
+    const {
+      q = '',
+      role,
+      status,
+      skills,
+      location,
+      page = 1,
+      limit = 10,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const query = {};
+
+    // Text search
+    if (q) {
+      query.$or = [
+        { name: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } }
+      ];
+    }
+
+    // Filters
+    if (role) query.role = role;
+    if (status) query.status = status;
+    if (location) query.location = { $regex: location, $options: 'i' };
+
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    let users = await User.find(query)
+      .select('-password')
+      .sort(sortOptions)
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    // If searching for jobseekers with skills, populate jobseeker data
+    if (role === 'jobseeker' && skills) {
+      const skillsArray = skills.split(',');
+      users = await User.aggregate([
+        { $match: query },
+        {
+          $lookup: {
+            from: 'jobseekers',
+            localField: '_id',
+            foreignField: 'userId',
+            as: 'jobseekerProfile'
+          }
+        },
+        {
+          $match: {
+            'jobseekerProfile.skills': { $in: skillsArray }
+          }
+        },
+        { $sort: sortOptions },
+        { $skip: (page - 1) * limit },
+        { $limit: limit * 1 }
+      ]);
+    }
+
+    const total = await User.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: users,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Search users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search users'
+    });
+  }
+};
+
+// @desc    Get user statistics
+// @route   GET /api/users/stats
+// @access  Private (Admin)
+const getUserStats = async (req, res) => {
+  try {
+    const [
+      totalUsers,
+      activeUsers,
+      jobseekers,
+      employers,
+      admins,
+      recentUsers
+    ] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ status: 'active' }),
+      User.countDocuments({ role: 'jobseeker' }),
+      User.countDocuments({ role: 'employer' }),
+      User.countDocuments({ role: 'admin' }),
+      User.countDocuments({
+        createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+      })
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalUsers,
+        activeUsers,
+        usersByRole: {
+          jobseekers,
+          employers,
+          admins
+        },
+        recentUsers
+      }
+    });
+  } catch (error) {
+    console.error('Get user stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user statistics'
+    });
+  }
+};
+
+// @desc    Bulk update users
+// @route   PUT /api/users/bulk-update
+// @access  Private (Admin)
+const bulkUpdateUsers = async (req, res) => {
+  try {
+    const { userIds, updateData } = req.body;
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'User IDs array is required'
+      });
+    }
+
+    const result = await User.updateMany(
+      { _id: { $in: userIds } },
+      updateData
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `${result.modifiedCount} users updated successfully`,
+      data: { modifiedCount: result.modifiedCount }
+    });
+  } catch (error) {
+    console.error('Bulk update users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to bulk update users'
+    });
+  }
+};
+
 module.exports = {
   getSavedCandidates,
   saveCandidate,
@@ -341,5 +505,8 @@ module.exports = {
   getResume,
   getNotifications,
   markNotificationAsRead,
-  deleteNotification
+  deleteNotification,
+  searchUsers,
+  getUserStats,
+  bulkUpdateUsers
 };

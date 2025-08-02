@@ -9,7 +9,24 @@ router
   .post(verifyToken, requireAdmin, TeamController.createTeamMember);
 
 router
+  .route('/search')
+  .get(TeamController.searchTeamMembers);
+
+router
+  .route('/stats')
+  .get(verifyToken, requireAdmin, TeamController.getTeamStats);
+
+router
+  .route('/departments')
+  .get(TeamController.getTeamDepartments);
+
+router
+  .route('/roles')
+  .get(TeamController.getTeamRoles);
+
+router
   .route('/:id')
+  .get(TeamController.getTeamMemberById)
   .put(verifyToken, requireAdmin, TeamController.updateTeamMember)
   .delete(verifyToken, requireAdmin, TeamController.deleteTeamMember);
 

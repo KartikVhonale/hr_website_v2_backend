@@ -61,8 +61,26 @@ const createJob = async (req, res) => {
         const employer = await User.findOne({ email: employerEmail, role: 'employer' });
 
         if (!employer) {
-            return res.status(404).json({ msg: 'Employer not found with this email' });
+            return res.status(404).json({
+                success: false,
+                message: 'Employer not found with this email'
+            });
         }
+
+        // Clean up the job data
+        // If salary is empty string or not provided, use CTC value
+        if (!jobData.salary || jobData.salary.trim() === '') {
+            jobData.salary = jobData.ctc || '';
+        }
+
+        // Remove empty string fields that might cause validation issues
+        Object.keys(jobData).forEach(key => {
+            if (jobData[key] === '') {
+                delete jobData[key];
+            }
+        });
+
+        console.log('Admin creating job with data:', jobData);
 
         // Create job with employer ID and set status to approved by default
         const job = await Job.create({
@@ -74,14 +92,32 @@ const createJob = async (req, res) => {
         // Populate employer info for response
         await job.populate('employer', 'name email');
 
-        res.status(201).json(job);
+        res.status(201).json({
+            success: true,
+            data: job,
+            message: 'Job created successfully'
+        });
     } catch (err) {
-        console.error(err.message);
+        console.error('Admin create job error:', err);
+
         if (err.name === 'ValidationError') {
-            const errors = Object.values(err.errors).map(e => e.message);
-            return res.status(400).json({ msg: errors.join(', ') });
+            const errors = Object.values(err.errors).map(error => ({
+                field: error.path,
+                message: error.message,
+                value: error.value
+            }));
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors
+            });
         }
-        res.status(500).send('Server Error');
+
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: err.message
+        });
     }
 };
 

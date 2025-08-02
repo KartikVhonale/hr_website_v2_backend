@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const verifyToken = (req, res, next) => {
   const authHeader = req.header('Authorization');
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
-  
+
   if (!token) {
     return res.status(401).json({
       success: false,
@@ -13,15 +13,41 @@ const verifyToken = (req, res, next) => {
   }
 
   try {
+    // Validate JWT_SECRET exists
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET is not configured');
+      return res.status(500).json({
+        success: false,
+        message: 'Server configuration error'
+      });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // console.log('Decoded JWT token:', decoded); // Commented out to avoid multiple logs
+
+    // Additional token validation
+    if (!decoded.userId || !decoded.email || !decoded.role) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token structure.'
+      });
+    }
+
     req.user = decoded;
     next();
   } catch (error) {
     console.error('Token verification error:', error.message);
+
+    // Provide specific error messages for different JWT errors
+    let message = 'Invalid or expired token.';
+    if (error.name === 'TokenExpiredError') {
+      message = 'Token has expired. Please login again.';
+    } else if (error.name === 'JsonWebTokenError') {
+      message = 'Invalid token format.';
+    }
+
     res.status(401).json({
       success: false,
-      message: 'Invalid or expired token.'
+      message
     });
   }
 };
@@ -87,17 +113,17 @@ const requireJobseeker = (req, res, next) => {
 const optionalAuth = (req, res, next) => {
   const authHeader = req.header('Authorization');
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
-  
+
   if (token) {
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = decoded;
     } catch (error) {
       // Token is invalid, but we don't fail the request
       console.log('Optional auth: Invalid token provided');
     }
   }
-  
+
   next();
 };
 

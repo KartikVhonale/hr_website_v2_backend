@@ -1,5 +1,5 @@
 const express = require('express');
-const { verifyToken } = require('../middleware/auth-middleware');
+const { verifyToken, requireAdmin } = require('../middleware/auth-middleware');
 const UserController = require('../controllers/user-controller');
 const router = express.Router();
 
@@ -26,5 +26,10 @@ router.get('/resume', verifyToken, UserController.getResume);
 router.get('/notifications', verifyToken, UserController.getNotifications);
 router.put('/notifications/:id/read', verifyToken, UserController.markNotificationAsRead);
 router.delete('/notifications/:id', verifyToken, UserController.deleteNotification);
+
+// Search and stats endpoints (Admin only)
+router.get('/search', verifyToken, requireAdmin, UserController.searchUsers);
+router.get('/stats', verifyToken, requireAdmin, UserController.getUserStats);
+router.put('/bulk-update', verifyToken, requireAdmin, UserController.bulkUpdateUsers);
 
 module.exports = router;

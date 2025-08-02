@@ -6,31 +6,77 @@ class JobController {
   // @access  Public
   static async getAllJobs(req, res) {
     try {
-      const { search, location, jobType } = req.query;
+      const {
+        search,
+        q,
+        location,
+        jobType,
+        experienceLevel,
+        page = 1,
+        limit = 10,
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = req.query;
+
       const queryObject = {};
 
-      if (search) {
-        queryObject.title = { $regex: search, $options: 'i' };
+      // Handle both 'search' and 'q' parameters
+      const searchTerm = search || q;
+      if (searchTerm && searchTerm.trim()) {
+        queryObject.$or = [
+          { title: { $regex: searchTerm, $options: 'i' } },
+          { description: { $regex: searchTerm, $options: 'i' } },
+          { company: { $regex: searchTerm, $options: 'i' } }
+        ];
       }
 
-      if (location) {
+      if (location && location.trim()) {
         queryObject.location = { $regex: location, $options: 'i' };
       }
 
-      if (jobType) {
-        queryObject.jobType = jobType;
+      if (jobType && jobType.trim()) {
+        queryObject.jobType = { $regex: jobType, $options: 'i' };
       }
 
-      const jobs = await Job.find(queryObject).populate('employer', 'name email');
+      if (experienceLevel && experienceLevel.trim()) {
+        queryObject.experienceLevel = { $regex: experienceLevel, $options: 'i' };
+      }
+
+      // Remove status filter to show ALL jobs regardless of status
+      // queryObject.status = 'active';
+
+      // Sorting
+      const sortOptions = {};
+      sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+      // Pagination
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+
+      const jobs = await Job.find(queryObject)
+        .populate('employer', 'name email')
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      const total = await Job.countDocuments(queryObject);
+
       res.status(200).json({
         success: true,
         count: jobs.length,
-        data: jobs
+        total,
+        data: jobs,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(total / parseInt(limit))
+        }
       });
     } catch (error) {
+      console.error('Get all jobs error:', error);
       res.status(500).json({
         success: false,
-        message: 'Server Error'
+        message: 'Server Error',
+        error: error.message
       });
     }
   }
@@ -66,16 +112,49 @@ class JobController {
   // @access  Private (Employer)
   static async createJob(req, res) {
     try {
-      req.body.employer = req.user.userId;
+      // Set employer from authenticated user
+      const employerId = req.user.userId || req.user.id;
+      req.body.employer = employerId;
+
+      // Set default status (model allows 'approved' or 'pending')
+      req.body.status = 'approved';
+
+      console.log('Creating job with employer ID:', employerId);
+      console.log('Job data:', JSON.stringify(req.body, null, 2));
+
       const job = await Job.create(req.body);
+      console.log('Job created successfully:', job._id);
+
       res.status(201).json({
         success: true,
-        data: job
+        data: job,
+        message: 'Job created successfully'
       });
     } catch (error) {
+      console.error('Create job error:', error);
+
+      // Handle validation errors
+      if (error.name === 'ValidationError') {
+        const errors = Object.values(error.errors).map(err => err.message);
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors
+        });
+      }
+
+      // Handle duplicate key errors
+      if (error.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          message: 'Duplicate field value entered'
+        });
+      }
+
       res.status(500).json({
         success: false,
-        message: 'Server Error'
+        message: 'Server Error',
+        error: error.message
       });
     }
   }

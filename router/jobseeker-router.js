@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const jobseekerController = require('../controllers/jobseeker-controller');
 const { verifyToken } = require('../middleware/auth-middleware');
+const { uploadLimiter } = require('../middleware/security-middleware');
 const { resumeStorage } = require('../config/cloudinary');
 
 // Profile routes
@@ -16,6 +17,22 @@ router.delete('/saved-jobs/:jobId', verifyToken, jobseekerController.unsaveJob);
 
 // Applied jobs routes
 router.get('/applied-jobs', verifyToken, jobseekerController.getAppliedJobs);
+
+// Dashboard and stats routes
+router.get('/dashboard', verifyToken, jobseekerController.getDashboardData);
+router.get('/stats', verifyToken, jobseekerController.getJobseekerStats);
+
+// Recommendations and interviews
+router.get('/recommendations', verifyToken, jobseekerController.getJobRecommendations);
+router.get('/interviews', verifyToken, jobseekerController.getInterviewSchedule);
+
+// Notifications routes
+router.get('/notifications', verifyToken, jobseekerController.getNotifications);
+router.put('/notifications/:id/read', verifyToken, jobseekerController.markNotificationAsRead);
+router.put('/notifications/mark-all-read', verifyToken, jobseekerController.markAllNotificationsAsRead);
+
+// Resume details route
+router.get('/resume', verifyToken, jobseekerController.getResumeDetails);
 
 // Resume upload configuration using Cloudinary storage - PDF ONLY
 const resumeUpload = multer({
@@ -39,8 +56,8 @@ const resumeUpload = multer({
     }
 });
 
-// PDF upload to Cloudinary using configured storage
-router.post('/upload-resume', verifyToken, resumeUpload.single('resume'), async (req, res) => {
+// PDF upload to Cloudinary using configured storage with rate limiting
+router.post('/upload-resume', verifyToken, uploadLimiter, resumeUpload.single('resume'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({

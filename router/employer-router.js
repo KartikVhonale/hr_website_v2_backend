@@ -9,6 +9,9 @@ const {
     getSavedCandidates,
     saveCandidate,
     unsaveCandidate,
+    getDashboardData,
+    getEmployerStats,
+    searchCandidates
 } = require('../controllers/employer-controller');
 const { verifyToken, requireEmployer } = require('../middleware/auth-middleware');
 
@@ -27,5 +30,12 @@ router.put('/applications/:applicationId', verifyToken, requireEmployer, updateA
 router.get('/saved-candidates', verifyToken, requireEmployer, getSavedCandidates);
 router.post('/saved-candidates/:candidateId', verifyToken, requireEmployer, saveCandidate);
 router.delete('/saved-candidates/:candidateId', verifyToken, requireEmployer, unsaveCandidate);
+
+// Dashboard and stats routes
+router.get('/dashboard', verifyToken, requireEmployer, getDashboardData);
+router.get('/stats', verifyToken, requireEmployer, getEmployerStats);
+
+// Candidate search route
+router.get('/candidates', verifyToken, requireEmployer, searchCandidates);
 
 module.exports = router;
