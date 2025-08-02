@@ -86,23 +86,30 @@ class JobController {
   // @access  Public
   static async getJob(req, res) {
     try {
+      console.log('🔍 getJob called with ID:', req.params.id);
+
       const job = await Job.findById(req.params.id).populate('employer', 'name email');
+      console.log('🔍 Job found:', job ? 'Yes' : 'No');
 
       if (!job) {
+        console.log('❌ Job not found for ID:', req.params.id);
         return res.status(404).json({
           success: false,
           message: 'Job not found'
         });
       }
 
+      console.log('✅ Returning job:', job.title);
       res.status(200).json({
         success: true,
         data: job
       });
     } catch (error) {
+      console.error('💥 getJob error:', error);
       res.status(500).json({
         success: false,
-        message: 'Server Error'
+        message: 'Server Error',
+        error: error.message
       });
     }
   }

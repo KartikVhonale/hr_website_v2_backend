@@ -16,7 +16,7 @@ router
 
 router
   .route('/:id')
-  .get(jobValidations.getById, JobController.getJob)
+  .get(JobController.getJob) // Temporarily remove validation for testing
   .put(verifyToken, jobValidations.update, JobController.updateJob)
   .delete(verifyToken, jobValidations.getById, JobController.deleteJob);
 

@@ -248,13 +248,23 @@ const getSavedJobs = async (req, res) => {
         // Get jobseeker profile
         const jobseekerProfile = await Jobseeker.findOne({ userId }).populate('savedJobs');
         if (!jobseekerProfile) {
-            return res.status(404).json({ msg: 'Jobseeker profile not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'Jobseeker profile not found'
+            });
         }
 
-        res.json(jobseekerProfile.savedJobs);
+        res.status(200).json({
+            success: true,
+            data: jobseekerProfile.savedJobs || []
+        });
     } catch (err) {
         console.error('Error in getSavedJobs:', err);
-        res.status(500).json({ msg: 'Server Error', error: err.message });
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: err.message
+        });
     }
 };
 

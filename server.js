@@ -1,9 +1,11 @@
-// Load environment variables with error checking
+// Load environment variables with flexible error handling
 const dotenvResult = require('dotenv').config();
 if (dotenvResult.error) {
-  console.error('❌ Error loading .env file:', dotenvResult.error.message);
-  console.error('💡 Make sure .env file exists in the backend directory');
-  process.exit(1);
+  console.warn('⚠️  .env file not found:', dotenvResult.error.message);
+  console.log('💡 Using environment variables from system (production mode)');
+  // Don't exit in production - environment variables might be set by hosting platform
+} else {
+  console.log('✅ .env file loaded successfully');
 }
 const path = require('path');
 const express = require('express');
