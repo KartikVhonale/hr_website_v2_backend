@@ -1,5 +1,8 @@
-// Use environment variables directly (no .env file loading)
-// Environment variables are set by the deployment platform (Render)
+// Load environment variables from .env file in development
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
+
 const path = require('path');
 const express = require('express');
 const cors = require('cors');

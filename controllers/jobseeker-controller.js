@@ -12,12 +12,10 @@ const { cloudinary } = require('../config/cloudinary');
 const getJobseekerProfile = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
-        console.log('getJobseekerProfile - User ID:', userId);
 
         // Get basic user info
         const user = await User.findById(userId).select('-password');
         if (!user) {
-            console.log('getJobseekerProfile - User not found with ID:', userId);
             return res.status(404).json({
                 success: false,
                 msg: 'User not found'
@@ -27,7 +25,6 @@ const getJobseekerProfile = async (req, res) => {
         // Get jobseeker profile or create if doesn't exist
         let jobseekerProfile = await Jobseeker.findOne({ userId });
         if (!jobseekerProfile) {
-            console.log('Creating new jobseeker profile for user:', userId);
             jobseekerProfile = new Jobseeker({
                 userId,
                 skills: [],
@@ -47,9 +44,6 @@ const getJobseekerProfile = async (req, res) => {
                 const newUrl = oldUrl.replace('/raw/upload/', '/image/upload/');
                 jobseekerProfile.resume.url = newUrl;
                 await jobseekerProfile.save();
-                console.log('Auto-migrated resume URL from raw to image format');
-                console.log('Old URL:', oldUrl);
-                console.log('New URL:', newUrl);
             }
         }
 
@@ -97,10 +91,6 @@ const getJobseekerProfile = async (req, res) => {
 // @route   PUT /api/jobseeker/profile
 // @access  Private
 const updateJobseekerProfile = async (req, res) => {
-    console.log('updateJobseekerProfile called');
-    console.log('User from token:', req.user);
-    console.log('Request body:', req.body);
-
     const {
         name,
         email,
@@ -149,12 +139,9 @@ const updateJobseekerProfile = async (req, res) => {
     }
 
     try {
-        console.log('Looking for user with ID:', userId);
-
         // Update user basic info if provided
         let user = await User.findById(userId);
         if (!user) {
-            console.log('User not found with ID:', userId);
             return res.status(404).json({
                 success: false,
                 msg: 'User not found'
@@ -167,24 +154,20 @@ const updateJobseekerProfile = async (req, res) => {
                 { $set: userFields },
                 { new: true, runValidators: true }
             ).select('-password');
-            console.log('User basic info updated');
         }
 
         // Update or create jobseeker profile
         let jobseekerProfile = await Jobseeker.findOne({ userId });
         if (!jobseekerProfile) {
-            console.log('Creating new jobseeker profile');
             jobseekerProfile = new Jobseeker({
                 userId,
                 ...jobseekerFields
             });
         } else {
-            console.log('Updating existing jobseeker profile');
             Object.assign(jobseekerProfile, jobseekerFields);
         }
 
         await jobseekerProfile.save();
-        console.log('Jobseeker profile updated successfully');
 
         // Combine user and jobseeker data for response - NEW FORMAT ONLY
         const profileData = {
@@ -245,12 +228,21 @@ const getSavedJobs = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
 
-        // Get jobseeker profile
-        const jobseekerProfile = await Jobseeker.findOne({ userId }).populate('savedJobs');
+        // Get jobseeker profile with populated job details
+        let jobseekerProfile = await Jobseeker.findOne({ userId }).populate({
+            path: 'savedJobs',
+            populate: {
+                path: 'employer',
+                select: 'name email company'
+            }
+        });
+
+        // If profile doesn't exist, create one or return empty array
         if (!jobseekerProfile) {
-            return res.status(404).json({
-                success: false,
-                message: 'Jobseeker profile not found'
+            return res.status(200).json({
+                success: true,
+                data: [],
+                message: 'No jobseeker profile found, but returning empty saved jobs array'
             });
         }
 
@@ -286,21 +278,36 @@ const saveJob = async (req, res) => {
 
         const job = await Job.findById(req.params.jobId);
         if (!job) {
-            return res.status(404).json({ msg: 'Job not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'Job not found'
+            });
         }
 
         // Check if the job is already saved
         if (jobseekerProfile.savedJobs.includes(req.params.jobId)) {
-            return res.status(400).json({ msg: 'Job already saved' });
+            return res.status(200).json({
+                success: true,
+                data: jobseekerProfile.savedJobs,
+                message: 'Job already saved'
+            });
         }
 
         jobseekerProfile.savedJobs.push(req.params.jobId);
         await jobseekerProfile.save();
 
-        res.json(jobseekerProfile.savedJobs);
+        res.status(200).json({
+            success: true,
+            data: jobseekerProfile.savedJobs,
+            message: 'Job saved successfully'
+        });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error('Error in saveJob:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: err.message
+        });
     }
 };
 
@@ -314,17 +321,28 @@ const unsaveJob = async (req, res) => {
         // Get jobseeker profile
         const jobseekerProfile = await Jobseeker.findOne({ userId });
         if (!jobseekerProfile) {
-            return res.status(404).json({ msg: 'Jobseeker profile not found' });
+            return res.status(200).json({
+                success: true,
+                data: [],
+                message: 'No profile found, job was not saved anyway'
+            });
         }
 
         const job = await Job.findById(req.params.jobId);
         if (!job) {
-            return res.status(404).json({ msg: 'Job not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'Job not found'
+            });
         }
 
         // Check if the job is saved
         if (!jobseekerProfile.savedJobs.includes(req.params.jobId)) {
-            return res.status(400).json({ msg: 'Job not saved' });
+            return res.status(200).json({
+                success: true,
+                data: jobseekerProfile.savedJobs,
+                message: 'Job was not saved'
+            });
         }
 
         jobseekerProfile.savedJobs = jobseekerProfile.savedJobs.filter(
@@ -332,10 +350,17 @@ const unsaveJob = async (req, res) => {
         );
         await jobseekerProfile.save();
 
-        res.json(jobseekerProfile.savedJobs);
+        res.status(200).json({
+            success: true,
+            data: jobseekerProfile.savedJobs
+        });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error('Error in unsaveJob:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Server Error',
+            error: err.message
+        });
     }
 };
 
@@ -363,7 +388,6 @@ const getAppliedJobs = async (req, res) => {
 const uploadResume = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
-        console.log('uploadResume called for user:', userId);
 
         // Check if Cloudinary result exists (from router)
         if (!req.cloudinaryResult) {
@@ -372,8 +396,6 @@ const uploadResume = async (req, res) => {
                 msg: 'No file uploaded or Cloudinary upload failed'
             });
         }
-
-        console.log('Cloudinary result received:', req.cloudinaryResult);
 
         // Get or create jobseeker profile
         let jobseekerProfile = await Jobseeker.findOne({ userId });
@@ -396,17 +418,14 @@ const uploadResume = async (req, res) => {
                 await cloudinary.uploader.destroy(jobseekerProfile.resume.public_id, {
                     resource_type: resourceType
                 });
-                console.log('Old resume deleted from Cloudinary with resource type:', resourceType);
             } catch (error) {
-                console.log('Error deleting old resume:', error.message);
                 // Try with different resource type if first attempt fails
                 try {
                     await cloudinary.uploader.destroy(jobseekerProfile.resume.public_id, {
                         resource_type: 'raw'
                     });
-                    console.log('Old resume deleted from Cloudinary with raw resource type');
                 } catch (secondError) {
-                    console.log('Failed to delete with both resource types:', secondError.message);
+                    console.error('Failed to delete old resume from Cloudinary:', secondError.message);
                 }
             }
         }
@@ -426,12 +445,7 @@ const uploadResume = async (req, res) => {
             }
         };
 
-        console.log('PDF stored with URL:', req.cloudinaryResult.secure_url);
-        console.log('PDF format:', req.cloudinaryResult.format);
-        console.log('Resource type:', req.cloudinaryResult.resource_type);
-
         await jobseekerProfile.save();
-        console.log('Resume uploaded successfully');
 
         // Get updated user info for complete response
         const user = await User.findById(userId).select('-password');
@@ -443,9 +457,6 @@ const uploadResume = async (req, res) => {
                 const newUrl = oldUrl.replace('/raw/upload/', '/image/upload/');
                 jobseekerProfile.resume.url = newUrl;
                 await jobseekerProfile.save();
-                console.log('Auto-migrated resume URL from raw to image format');
-                console.log('Old URL:', oldUrl);
-                console.log('New URL:', newUrl);
             }
         }
 
@@ -501,7 +512,6 @@ const uploadResume = async (req, res) => {
 const deleteResume = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
-        console.log('deleteResume called for user:', userId);
 
         const jobseekerProfile = await Jobseeker.findOne({ userId });
         if (!jobseekerProfile || !jobseekerProfile.resume) {
@@ -519,17 +529,14 @@ const deleteResume = async (req, res) => {
                 await cloudinary.uploader.destroy(jobseekerProfile.resume.public_id, {
                     resource_type: resourceType
                 });
-                console.log('Resume deleted from Cloudinary with resource type:', resourceType);
             } catch (error) {
-                console.log('Error deleting resume from Cloudinary:', error.message);
                 // Try with different resource type if first attempt fails
                 try {
                     await cloudinary.uploader.destroy(jobseekerProfile.resume.public_id, {
                         resource_type: 'raw'
                     });
-                    console.log('Resume deleted from Cloudinary with raw resource type');
                 } catch (secondError) {
-                    console.log('Failed to delete with both resource types:', secondError.message);
+                    console.error('Failed to delete resume from Cloudinary:', secondError.message);
                 }
             }
         }

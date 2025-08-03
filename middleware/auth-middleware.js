@@ -120,7 +120,7 @@ const optionalAuth = (req, res, next) => {
       req.user = decoded;
     } catch (error) {
       // Token is invalid, but we don't fail the request
-      console.log('Optional auth: Invalid token provided');
+      // Silently continue without authentication
     }
   }
 

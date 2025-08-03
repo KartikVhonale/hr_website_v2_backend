@@ -36,6 +36,7 @@ coverage
 
 # Test files and directories
 Z-Test/
+Z-Test/*
 *test*.js
 debug-env.js
 test-connection.js
