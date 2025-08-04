@@ -14,6 +14,7 @@ const {
     searchCandidates
 } = require('../controllers/employer-controller');
 const { verifyToken, requireEmployer } = require('../middleware/auth-middleware');
+const JobController = require('../controllers/job-controller');
 
 // Profile routes
 router.get('/profile', verifyToken, requireEmployer, getEmployerProfile);
@@ -21,6 +22,8 @@ router.put('/profile', verifyToken, requireEmployer, updateEmployerProfile);
 
 // Job routes
 router.get('/jobs', verifyToken, requireEmployer, getPostedJobs);
+// Delete job route
+router.delete('/jobs/:id', verifyToken, requireEmployer, JobController.deleteJob);
 
 // Application routes
 router.get('/jobs/:jobId/applications', verifyToken, requireEmployer, getApplicationsForJob);

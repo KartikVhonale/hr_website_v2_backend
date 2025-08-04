@@ -63,6 +63,7 @@ app.use(requestSizeLimit); // Request size limiting
 app.use(cors({
   origin: [
     'http://localhost:5173', // Local frontend development
+    'http://localhost:5174',
     'https://hr-website-v2.vercel.app', // Replace with your frontend domain
     process.env.FRONTEND_URL // Optional: configure via environment variable
   ].filter(Boolean), // Remove undefined values

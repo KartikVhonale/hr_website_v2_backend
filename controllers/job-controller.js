@@ -119,18 +119,26 @@ class JobController {
   // @access  Private (Employer)
   static async createJob(req, res) {
     try {
+      // Ensure user is authenticated
+      if (!req.user || !req.user.userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required to create a job'
+        });
+      }
+
       // Set employer from authenticated user
-      const employerId = req.user.userId || req.user.id;
+      const employerId = req.user.userId;
       req.body.employer = employerId;
 
       // Set default status (model allows 'approved' or 'pending')
       req.body.status = 'approved';
 
-      console.log('Creating job with employer ID:', employerId);
-      console.log('Job data:', JSON.stringify(req.body, null, 2));
+      // console.log('Creating job with employer ID:', employerId);
+      // console.log('Job data:', JSON.stringify(req.body, null, 2));
 
       const job = await Job.create(req.body);
-      console.log('Job created successfully:', job._id);
+      // console.log('Job created successfully:', job._id);
 
       res.status(201).json({
         success: true,
@@ -220,18 +228,22 @@ class JobController {
       }
 
       // Make sure user is job owner or admin
-      if (job.employer.toString() !== req.user.userId && req.user.role !== 'admin') {
+      const userId = req.user.userId || req.user.id;
+      console.log(`User ID: ${userId}`);
+      console.log(`Job Employer ID: ${job.employer.toString()}`);
+      if (job.employer.toString() !== userId && req.user.role !== 'admin') {
         return res.status(401).json({
           success: false,
           message: 'Not authorized to delete this job'
         });
       }
 
-      await job.remove();
+      await Job.findByIdAndDelete(req.params.id);
 
       res.status(200).json({
         success: true,
-        data: {}
+        data: {},
+        message: 'Job deleted successfully'
       });
     } catch (error) {
       res.status(500).json({
