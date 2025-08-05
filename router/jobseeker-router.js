@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
 const jobseekerController = require('../controllers/jobseeker-controller');
 const { verifyToken } = require('../middleware/auth-middleware');
 const { uploadLimiter } = require('../middleware/security-middleware');
-const { resumeStorage } = require('../config/cloudinary');
+const { resumeUpload } = require('../middleware/upload-middleware');
 
 // Profile routes
 router.get('/profile', verifyToken, jobseekerController.getJobseekerProfile);
@@ -33,28 +32,6 @@ router.put('/notifications/mark-all-read', verifyToken, jobseekerController.mark
 
 // Resume details route
 router.get('/resume', verifyToken, jobseekerController.getResumeDetails);
-
-// Resume upload configuration using Cloudinary storage - PDF ONLY
-const resumeUpload = multer({
-    storage: resumeStorage, // Use the configured Cloudinary storage
-    limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB limit for PDF files
-    },
-    fileFilter: (_req, file, cb) => {
-        console.log('File filter called with:', file);
-        console.log('File mimetype:', file.mimetype);
-        console.log('File originalname:', file.originalname);
-
-        // Only accept PDF files
-        if (file.mimetype === 'application/pdf') {
-            console.log('PDF file accepted:', file.originalname);
-            cb(null, true);
-        } else {
-            console.log('File type rejected. Only PDF files are allowed:', file.mimetype);
-            cb(new Error('Only PDF files are allowed. Please convert your document to PDF format.'), false);
-        }
-    }
-});
 
 // PDF upload to Cloudinary using configured storage with rate limiting
 router.post('/upload-resume', verifyToken, uploadLimiter, resumeUpload.single('resume'), async (req, res) => {

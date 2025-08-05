@@ -48,25 +48,43 @@ class ApplicationController {
   // @access  Private (Jobseeker)
   static async applyForJob(req, res) {
     try {
-      req.body.applicant = req.user.userId;
-      req.body.job = req.params.jobId;
+      const { coverLetter, expectedSalary, availableFrom, additionalInfo } = req.body;
+      const applicant = req.user.userId;
+      const job = req.params.jobId;
 
-      const job = await Job.findById(req.params.jobId);
+      const jobExists = await Job.findById(job);
 
-      if (!job) {
+      if (!jobExists) {
         return res.status(404).json({
           success: false,
           message: 'Job not found'
         });
       }
 
-      const application = await Application.create(req.body);
+      const applicationData = {
+        applicant,
+        job,
+        coverLetter,
+        expectedSalary,
+        availableFrom,
+        additionalInfo,
+      };
+
+      if (req.file) {
+        applicationData.resume = {
+          url: req.file.path,
+          original_name: req.file.originalname,
+        };
+      }
+
+      const application = await Application.create(applicationData);
 
       res.status(201).json({
         success: true,
         data: application
       });
     } catch (error) {
+      console.error('Application submission error:', error);
       res.status(500).json({
         success: false,
         message: 'Server Error'
