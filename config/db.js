@@ -16,7 +16,8 @@ const connectDB = async () => {
         deprecationErrors: true,
       },
       retryWrites: true,
-      w: 'majority'
+      w: 'majority',
+      tls: true
     });
 
     // Send a ping to confirm a successful connection

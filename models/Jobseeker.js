@@ -64,6 +64,10 @@ const JobseekerSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Job'
   }],
+  applications: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Application'
+  }],
   profileCompletion: {
     type: Number,
     default: 0

@@ -327,11 +327,6 @@ const applicationValidations = {
     param('jobId')
       .isMongoId()
       .withMessage('Invalid job ID format'),
-    body('resume')
-      .notEmpty()
-      .withMessage('Resume is required')
-      .isURL()
-      .withMessage('Resume must be a valid URL'),
     body('notes')
       .optional()
       .trim()

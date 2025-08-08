@@ -22,8 +22,14 @@ const ApplicationSchema = new mongoose.Schema({
     default: 'applied'
   },
   resume: {
-    type: String,
-    required: true
+    url: {
+      type: String,
+      required: true
+    },
+    original_name: {
+      type: String,
+      required: true
+    }
   },
   notes: {
     type: String

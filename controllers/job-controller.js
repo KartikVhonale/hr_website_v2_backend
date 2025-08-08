@@ -1,4 +1,6 @@
 const Job = require('../models/Job');
+const Application = require('../models/Application');
+const mongoose = require('mongoose');
 
 class JobController {
   // @desc    Get all jobs
@@ -253,18 +255,49 @@ class JobController {
     }
   }
 
-  // @desc    Get all jobs for a specific employer
+  // @desc    Get all jobs for a specific employer with application counts
   // @route   GET /api/jobs/employer/:employerId
   // @access  Public
   static async getJobsByEmployer(req, res) {
     try {
-      const jobs = await Job.find({ employer: req.params.employerId }).populate('employer', 'name email');
+      const employerId = new mongoose.Types.ObjectId(req.params.employerId);
+
+      const jobs = await Job.aggregate([
+        {
+          $match: { employer: employerId }
+        },
+        {
+          $lookup: {
+            from: 'applications',
+            localField: '_id',
+            foreignField: 'job',
+            as: 'applications'
+          }
+        },
+        {
+          $addFields: {
+            applicationCount: { $size: '$applications' }
+          }
+        },
+        {
+          $project: {
+            applications: 0 // Exclude the applications array from the final output
+          }
+        }
+      ]);
+
+      // The aggregation pipeline returns plain objects, so if you need to populate employer details,
+      // you might need a separate query or a different approach.
+      // For this case, we'll manually populate employer details for simplicity.
+      const populatedJobs = await Job.populate(jobs, { path: 'employer', select: 'name email' });
+
       res.status(200).json({
         success: true,
-        count: jobs.length,
-        data: jobs
+        count: populatedJobs.length,
+        data: populatedJobs
       });
     } catch (error) {
+      console.error('Error fetching jobs by employer:', error);
       res.status(500).json({
         success: false,
         message: 'Server Error'

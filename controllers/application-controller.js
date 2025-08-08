@@ -1,5 +1,6 @@
 const Application = require('../models/Application');
 const Job = require('../models/Job');
+const Jobseeker = require('../models/Jobseeker');
 
 class ApplicationController {
   // @desc    Get all applications
@@ -49,21 +50,24 @@ class ApplicationController {
   static async applyForJob(req, res) {
     try {
       const { coverLetter, expectedSalary, availableFrom, additionalInfo } = req.body;
-      const applicant = req.user.userId;
-      const job = req.params.jobId;
+      const userId = req.user.userId;
+      const { jobId } = req.params;
 
-      const jobExists = await Job.findById(job);
+      let jobseeker = await Jobseeker.findOne({ userId: userId });
+      if (!jobseeker) {
+        jobseeker = new Jobseeker({ userId: userId });
+        await jobseeker.save();
+      }
 
-      if (!jobExists) {
-        return res.status(404).json({
-          success: false,
-          message: 'Job not found'
-        });
+      const job = await Job.findById(jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
       const applicationData = {
-        applicant,
-        job,
+        applicant: userId,
+        job: jobId,
+        employer: job.employer,
         coverLetter,
         expectedSalary,
         availableFrom,
@@ -72,12 +76,27 @@ class ApplicationController {
 
       if (req.file) {
         applicationData.resume = {
-          url: req.file.path,
+          url: req.file.path, // Cloudinary URL
           original_name: req.file.originalname,
+        };
+      } else if (jobseeker.resume && jobseeker.resume.url) {
+        applicationData.resume = {
+          url: jobseeker.resume.url,
+          original_name: jobseeker.resume.original_name,
         };
       }
 
+      if (!applicationData.resume) {
+        return res.status(400).json({
+            success: false,
+            message: 'A resume is required to apply for this job.'
+        });
+      }
+
       const application = await Application.create(applicationData);
+
+      jobseeker.applications.push(application._id);
+      await jobseeker.save();
 
       res.status(201).json({
         success: true,
@@ -85,9 +104,16 @@ class ApplicationController {
       });
     } catch (error) {
       console.error('Application submission error:', error);
+      if (error.name === 'ValidationError') {
+        const messages = Object.values(error.errors).map(val => val.message);
+        return res.status(400).json({
+          success: false,
+          message: messages.join('. ')
+        });
+      }
       res.status(500).json({
         success: false,
-        message: 'Server Error'
+        message: 'An unexpected error occurred. Please try again.'
       });
     }
   }

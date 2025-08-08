@@ -239,8 +239,7 @@ const getDashboardData = async (req, res) => {
             Application.find({ job: { $in: jobIds } })
                 .populate('job', 'title')
                 .populate('applicant', 'name email')
-                .sort({ createdAt: -1 })
-                .limit(10),
+                .sort({ createdAt: -1 }),
 
             // Get employer profile with saved candidates
             Employer.findOne({ userId: employerId })

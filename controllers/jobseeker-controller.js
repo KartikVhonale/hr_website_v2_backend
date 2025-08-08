@@ -233,7 +233,8 @@ const getSavedJobs = async (req, res) => {
             path: 'savedJobs',
             populate: {
                 path: 'employer',
-                select: 'name email company'
+                model: 'User',
+                select: 'name email'
             }
         });
 
