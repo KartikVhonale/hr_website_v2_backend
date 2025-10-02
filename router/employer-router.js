@@ -5,6 +5,7 @@ const {
     updateEmployerProfile,
     getPostedJobs,
     getApplicationsForJob,
+    getAllApplications, // Added import
     updateApplicationStatus,
     getSavedCandidates,
     saveCandidate,
@@ -26,6 +27,7 @@ router.get('/jobs', verifyToken, requireEmployer, getPostedJobs);
 router.delete('/jobs/:id', verifyToken, requireEmployer, JobController.deleteJob);
 
 // Application routes
+router.get('/applications', verifyToken, requireEmployer, getAllApplications); // Added route for all applications
 router.get('/jobs/:jobId/applications', verifyToken, requireEmployer, getApplicationsForJob);
 router.put('/applications/:applicationId', verifyToken, requireEmployer, updateApplicationStatus);
 

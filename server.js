@@ -113,6 +113,32 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Placeholder image service
+app.get('/api/placeholder/:width/:height', (req, res) => {
+  const { width, height } = req.params;
+  
+  // Validate dimensions
+  const w = parseInt(width);
+  const h = parseInt(height);
+  
+  if (isNaN(w) || isNaN(h) || w <= 0 || h <= 0 || w > 2000 || h > 2000) {
+    return res.status(400).send('Invalid dimensions');
+  }
+  
+  // Create a simple SVG placeholder
+  const svg = `
+    <svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#f0f0f0"/>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="${Math.min(w, h) / 4}" 
+            fill="#999" text-anchor="middle" dy=".3em">${w}×${h}</text>
+    </svg>
+  `;
+  
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+  res.send(svg);
+});
+
 // Auth routes
 app.use('/api/auth', authRouter);
 app.use('/api/jobs', jobRouter);

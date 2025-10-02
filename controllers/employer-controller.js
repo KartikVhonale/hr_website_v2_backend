@@ -83,6 +83,43 @@ const getPostedJobs = async (req, res) => {
     }
 };
 
+// @desc    Get all applications for an employer
+// @route   GET /api/employer/applications
+// @access  Private (Employer)
+const getAllApplications = async (req, res) => {
+    try {
+        const employerId = req.user.userId || req.user.id;
+        
+        // First get all jobs posted by this employer
+        const employerJobs = await Job.find({ employer: employerId }).select('_id');
+        const jobIds = employerJobs.map(job => job._id);
+        
+        // Then get all applications for those jobs
+        const applications = await Application.find({ job: { $in: jobIds } })
+            .populate({
+                path: 'job',
+                select: 'title company location'
+            })
+            .populate({
+                path: 'applicant',
+                select: 'name email phone profileImage skills'
+            })
+            .sort({ createdAt: -1 });
+            
+        res.status(200).json({
+            success: true,
+            count: applications.length,
+            data: applications
+        });
+    } catch (err) {
+        console.error('Get all applications error:', err.message);
+        res.status(500).json({
+            success: false,
+            message: 'Server Error'
+        });
+    }
+};
+
 // @desc    Get all applications for a specific job
 // @route   GET /api/employer/jobs/:jobId/applications
 // @access  Private (Employer)
@@ -102,21 +139,54 @@ const getApplicationsForJob = async (req, res) => {
 const updateApplicationStatus = async (req, res) => {
     const { status } = req.body;
 
+    // Map frontend status values to backend status values
+    let mappedStatus = status;
+    if (status === 'approved') {
+        mappedStatus = 'selected';
+    } else if (status === 'applied') {
+        mappedStatus = 'applied';
+    } else if (status === 'rejected') {
+        mappedStatus = 'rejected';
+    } else if (status === 'review') {
+        mappedStatus = 'review';
+    }
+
     try {
-        let application = await Application.findById(req.params.applicationId);
+        // Use findByIdAndUpdate to only update the status field and bypass validation
+        let application = await Application.findByIdAndUpdate(
+            req.params.applicationId,
+            { status: mappedStatus },
+            { new: true, runValidators: false } // runValidators: false bypasses validation
+        )
+        .populate({
+            path: 'job',
+            select: 'title company location employer'
+        })
+        .populate({
+            path: 'applicant',
+            select: 'name email phone profileImage skills'
+        });
 
         if (!application) {
+            // console.log('Application not found:', req.params.applicationId);
             return res.status(404).json({ msg: 'Application not found' });
         }
+        
+        // Check to ensure the employer owns the job associated with the application
+        const employerId = req.user.userId || req.user.id;
+        
+        // Since we've populated the job, we can use job.employer directly
+        // console.log('Found job:', application.job._id, 'with employer:', application.job.employer);
 
-        // TODO: Add check to ensure the employer owns the job associated with the application
+        // console.log('Authorization failed. Job employer:', application.job.employer, 'User ID:', employerId);
+        if (application.job.employer.toString() !== employerId.toString()) {
+            return res.status(403).json({ msg: 'User not authorized to update this application' });
+        }
 
-        application.status = status;
-        await application.save();
-
+        // console.log('Application status updated successfully:', application._id, 'to', mappedStatus);
         res.json(application);
     } catch (err) {
-        console.error(err.message);
+        console.error('Error updating application status:', err.message);
         res.status(500).send('Server Error');
     }
 };
@@ -478,6 +548,7 @@ module.exports = {
     updateEmployerProfile,
     getPostedJobs,
     getApplicationsForJob,
+    getAllApplications,
     updateApplicationStatus,
     getSavedCandidates,
     saveCandidate,
