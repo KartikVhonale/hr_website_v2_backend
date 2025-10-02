@@ -139,17 +139,8 @@ const getApplicationsForJob = async (req, res) => {
 const updateApplicationStatus = async (req, res) => {
     const { status } = req.body;
 
-    // Map frontend status values to backend status values
-    let mappedStatus = status;
-    if (status === 'approved') {
-        mappedStatus = 'selected';
-    } else if (status === 'applied') {
-        mappedStatus = 'applied';
-    } else if (status === 'rejected') {
-        mappedStatus = 'rejected';
-    } else if (status === 'review') {
-        mappedStatus = 'review';
-    }
+    // No mapping needed anymore since frontend and backend use the same status values
+    const mappedStatus = status;
 
     try {
         // Use findByIdAndUpdate to only update the status field and bypass validation
