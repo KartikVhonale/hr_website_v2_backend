@@ -44,8 +44,8 @@ class JobController {
         queryObject.experienceLevel = { $regex: experienceLevel, $options: 'i' };
       }
 
-      // Remove status filter to show ALL jobs regardless of status
-      // queryObject.status = 'active';
+      // Only show approved (active) jobs in the job portal
+      queryObject.status = 'approved';
 
       // Sorting
       const sortOptions = {};
@@ -101,6 +101,14 @@ class JobController {
         });
       }
 
+      // Only allow access to approved (active) jobs
+      if (job.status !== 'approved') {
+        return res.status(404).json({
+          success: false,
+          message: 'Job not found'
+        });
+      }
+
       console.log('✅ Returning job:', job.title);
       res.status(200).json({
         success: true,
@@ -133,7 +141,7 @@ class JobController {
       const employerId = req.user.userId;
       req.body.employer = employerId;
 
-      // Set default status (model allows 'approved' or 'pending')
+      // Set default status (model allows 'approved', 'pending', or 'inactive')
       req.body.status = 'approved';
 
       // console.log('Creating job with employer ID:', employerId);

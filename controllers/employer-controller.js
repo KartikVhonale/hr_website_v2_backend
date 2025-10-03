@@ -322,6 +322,7 @@ const getDashboardData = async (req, res) => {
             totalJobs: employerJobs.length,
             activeJobs: employerJobs.filter(job => job.status === 'approved').length,
             pendingJobs: employerJobs.filter(job => job.status === 'pending').length,
+            inactiveJobs: employerJobs.filter(job => job.status === 'inactive').length,
             totalApplications: applications.length,
             savedCandidates: savedCandidatesData?.savedCandidates?.length || 0,
             recentApplications: applications.filter(app => {
@@ -365,14 +366,16 @@ const getEmployerStats = async (req, res) => {
             totalJobs,
             activeJobs,
             expiredJobs,
+            inactiveJobs,
             totalApplications,
             pendingApplications,
             reviewedApplications,
             hiredApplications
         ] = await Promise.all([
             Job.countDocuments({ employer: employerId }),
-            Job.countDocuments({ employer: employerId, status: 'active' }),
+            Job.countDocuments({ employer: employerId, status: 'approved' }),
             Job.countDocuments({ employer: employerId, status: 'expired' }),
+            Job.countDocuments({ employer: employerId, status: 'inactive' }),
             Application.countDocuments({
                 job: { $in: await Job.find({ employer: employerId }).select('_id') }
             }),
@@ -396,7 +399,8 @@ const getEmployerStats = async (req, res) => {
                 jobs: {
                     total: totalJobs,
                     active: activeJobs,
-                    expired: expiredJobs
+                    expired: expiredJobs,
+                    inactive: inactiveJobs
                 },
                 applications: {
                     total: totalApplications,

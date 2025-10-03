@@ -41,7 +41,7 @@ const JobSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['approved', 'pending'],
+    enum: ['approved', 'pending', 'inactive'],
     default: 'pending'
   },
   employer: {

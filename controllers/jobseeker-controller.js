@@ -198,26 +198,11 @@ const updateJobseekerProfile = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Profile updated successfully',
             data: profileData
         });
     } catch (err) {
         console.error(err.message);
-
-        // Handle validation errors
-        if (err.name === 'ValidationError') {
-            const errors = Object.values(err.errors).map(e => e.message);
-            return res.status(400).json({
-                success: false,
-                msg: 'Validation Error',
-                errors: errors
-            });
-        }
-
-        res.status(500).json({
-            success: false,
-            msg: 'Server Error'
-        });
+        res.status(500).send('Server Error');
     }
 };
 
@@ -228,36 +213,26 @@ const getSavedJobs = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
 
-        // Get jobseeker profile with populated job details
-        let jobseekerProfile = await Jobseeker.findOne({ userId }).populate({
+        const jobseekerProfile = await Jobseeker.findOne({ userId }).populate({
             path: 'savedJobs',
-            populate: {
-                path: 'employer',
-                model: 'User',
-                select: 'name email'
-            }
+            match: { status: 'approved' }, // Only show active jobs
+            options: { sort: { createdAt: -1 } }
         });
 
-        // If profile doesn't exist, create one or return empty array
         if (!jobseekerProfile) {
-            return res.status(200).json({
-                success: true,
-                data: [],
-                message: 'No jobseeker profile found, but returning empty saved jobs array'
+            return res.status(404).json({
+                success: false,
+                message: 'Jobseeker profile not found'
             });
         }
 
         res.status(200).json({
             success: true,
-            data: jobseekerProfile.savedJobs || []
+            data: jobseekerProfile.savedJobs
         });
     } catch (err) {
-        console.error('Error in getSavedJobs:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: err.message
-        });
+        console.error(err.message);
+        res.status(500).send('Server Error');
     }
 };
 
@@ -267,48 +242,40 @@ const getSavedJobs = async (req, res) => {
 const saveJob = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
+        const { jobId } = req.params;
 
-        // Get or create jobseeker profile
-        let jobseekerProfile = await Jobseeker.findOne({ userId });
-        if (!jobseekerProfile) {
-            jobseekerProfile = new Jobseeker({
-                userId,
-                savedJobs: []
-            });
-        }
-
-        const job = await Job.findById(req.params.jobId);
+        // Verify the job exists and is active
+        const job = await Job.findOne({ _id: jobId, status: 'approved' });
         if (!job) {
             return res.status(404).json({
                 success: false,
-                message: 'Job not found'
+                message: 'Job not found or not active'
             });
         }
 
-        // Check if the job is already saved
-        if (jobseekerProfile.savedJobs.includes(req.params.jobId)) {
-            return res.status(200).json({
-                success: true,
-                data: jobseekerProfile.savedJobs,
+        let jobseekerProfile = await Jobseeker.findOne({ userId });
+        if (!jobseekerProfile) {
+            jobseekerProfile = new Jobseeker({ userId });
+        }
+
+        // Check if job is already saved
+        if (jobseekerProfile.savedJobs.includes(jobId)) {
+            return res.status(400).json({
+                success: false,
                 message: 'Job already saved'
             });
         }
 
-        jobseekerProfile.savedJobs.push(req.params.jobId);
+        jobseekerProfile.savedJobs.push(jobId);
         await jobseekerProfile.save();
 
         res.status(200).json({
             success: true,
-            data: jobseekerProfile.savedJobs,
             message: 'Job saved successfully'
         });
     } catch (err) {
-        console.error('Error in saveJob:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: err.message
-        });
+        console.error(err.message);
+        res.status(500).send('Server Error');
     }
 };
 
@@ -318,50 +285,28 @@ const saveJob = async (req, res) => {
 const unsaveJob = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
+        const { jobId } = req.params;
 
-        // Get jobseeker profile
         const jobseekerProfile = await Jobseeker.findOne({ userId });
         if (!jobseekerProfile) {
-            return res.status(200).json({
-                success: true,
-                data: [],
-                message: 'No profile found, job was not saved anyway'
-            });
-        }
-
-        const job = await Job.findById(req.params.jobId);
-        if (!job) {
             return res.status(404).json({
                 success: false,
-                message: 'Job not found'
-            });
-        }
-
-        // Check if the job is saved
-        if (!jobseekerProfile.savedJobs.includes(req.params.jobId)) {
-            return res.status(200).json({
-                success: true,
-                data: jobseekerProfile.savedJobs,
-                message: 'Job was not saved'
+                message: 'Jobseeker profile not found'
             });
         }
 
         jobseekerProfile.savedJobs = jobseekerProfile.savedJobs.filter(
-            (jobId) => jobId.toString() !== req.params.jobId
+            id => id.toString() !== jobId.toString()
         );
         await jobseekerProfile.save();
 
         res.status(200).json({
             success: true,
-            data: jobseekerProfile.savedJobs
+            message: 'Job unsaved successfully'
         });
     } catch (err) {
-        console.error('Error in unsaveJob:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Server Error',
-            error: err.message
-        });
+        console.error(err.message);
+        res.status(500).send('Server Error');
     }
 };
 
@@ -371,12 +316,22 @@ const unsaveJob = async (req, res) => {
 const getAppliedJobs = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ msg: 'User not found' });
-        }
-        const applications = await Application.find({ applicant: userId }).populate('job');
-        res.json(applications);
+
+        const applications = await Application.find({ applicant: userId })
+            .populate({
+                path: 'job',
+                match: { status: 'approved' }, // Only show applications for active jobs
+                select: 'title company location ctc jobType createdAt'
+            })
+            .sort({ createdAt: -1 });
+
+        // Filter out applications where the job is null (inactive jobs)
+        const activeApplications = applications.filter(app => app.job !== null);
+
+        res.status(200).json({
+            success: true,
+            data: activeApplications
+        });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
@@ -389,120 +344,44 @@ const getAppliedJobs = async (req, res) => {
 const uploadResume = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
+        const { cloudinaryResult, originalFileName } = req;
 
-        // Check if Cloudinary result exists (from router)
-        if (!req.cloudinaryResult) {
+        if (!cloudinaryResult) {
             return res.status(400).json({
                 success: false,
-                msg: 'No file uploaded or Cloudinary upload failed'
+                msg: 'No file uploaded'
             });
         }
 
-        // Get or create jobseeker profile
-        let jobseekerProfile = await Jobseeker.findOne({ userId });
+        const jobseekerProfile = await Jobseeker.findOne({ userId });
         if (!jobseekerProfile) {
-            jobseekerProfile = new Jobseeker({
-                userId,
-                skills: [],
-                experience: [],
-                education: [],
-                certifications: [],
-                socialLinks: {}
+            return res.status(404).json({
+                success: false,
+                msg: 'Jobseeker profile not found'
             });
         }
 
-        // Delete old resume from Cloudinary if exists
-        if (jobseekerProfile.resume && jobseekerProfile.resume.public_id) {
-            try {
-                // Try to determine resource type from stored data, fallback to auto-detection
-                const resourceType = jobseekerProfile.resume.cloudinary_info?.resource_type || 'image';
-                await cloudinary.uploader.destroy(jobseekerProfile.resume.public_id, {
-                    resource_type: resourceType
-                });
-            } catch (error) {
-                // Try with different resource type if first attempt fails
-                try {
-                    await cloudinary.uploader.destroy(jobseekerProfile.resume.public_id, {
-                        resource_type: 'raw'
-                    });
-                } catch (secondError) {
-                    console.error('Failed to delete old resume from Cloudinary:', secondError.message);
-                }
-            }
-        }
-
-        // Store new resume information from Cloudinary result
+        // Update resume details
         jobseekerProfile.resume = {
-            url: req.cloudinaryResult.secure_url, // Direct PDF URL from Cloudinary
-            public_id: req.cloudinaryResult.public_id,
-            original_name: req.originalFileName,
+            url: cloudinaryResult.secure_url,
+            public_id: cloudinaryResult.public_id,
+            original_name: originalFileName,
             uploaded_at: new Date(),
-            cloudinary_info: {
-                asset_id: req.cloudinaryResult.asset_id,
-                format: req.cloudinaryResult.format,
-                resource_type: req.cloudinaryResult.resource_type,
-                bytes: req.cloudinaryResult.bytes,
-                pages: req.cloudinaryResult.pages
-            }
+            file_size: cloudinaryResult.bytes
         };
 
         await jobseekerProfile.save();
 
-        // Get updated user info for complete response
-        const user = await User.findById(userId).select('-password');
-
-        // Ensure resume URL is in correct format (convert raw to image if needed)
-        if (jobseekerProfile.resume && jobseekerProfile.resume.url) {
-            if (jobseekerProfile.resume.url.includes('/raw/upload/')) {
-                const oldUrl = jobseekerProfile.resume.url;
-                const newUrl = oldUrl.replace('/raw/upload/', '/image/upload/');
-                jobseekerProfile.resume.url = newUrl;
-                await jobseekerProfile.save();
-            }
-        }
-
-        // Return complete profile data like in getJobseekerProfile
-        const profileData = {
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            status: user.status,
-            profilePicture: user.profilePicture,
-            // Jobseeker profile data
-            phone: jobseekerProfile.phone,
-            location: jobseekerProfile.location,
-            jobTitle: jobseekerProfile.jobTitle,
-            summary: jobseekerProfile.summary,
-            skills: jobseekerProfile.skills,
-            experience: jobseekerProfile.experience,
-            education: jobseekerProfile.education,
-            certifications: jobseekerProfile.certifications,
-            resume: jobseekerProfile.resume,
-            savedJobs: jobseekerProfile.savedJobs,
-            profileCompletion: jobseekerProfile.profileCompletion,
-            // Social links - NEW FORMAT ONLY
-            linkedin: jobseekerProfile.socialLinks?.linkedin,
-            github: jobseekerProfile.socialLinks?.github,
-            portfolio: jobseekerProfile.socialLinks?.portfolio,
-            socialLinks: jobseekerProfile.socialLinks
-        };
-
-        res.json({
+        res.status(200).json({
             success: true,
-            message: 'Resume uploaded successfully in PDF format',
-            data: {
-                resume: jobseekerProfile.resume,
-                profile: profileData
-            }
+            msg: 'Resume uploaded successfully',
+            data: jobseekerProfile.resume
         });
-
     } catch (err) {
-        console.error('Resume upload error:', err);
+        console.error('Resume upload controller error:', err);
         res.status(500).json({
             success: false,
-            msg: 'Server Error',
-            error: err.message
+            msg: 'Failed to save resume details'
         });
     }
 };
@@ -515,81 +394,31 @@ const deleteResume = async (req, res) => {
         const userId = req.user.userId || req.user.id;
 
         const jobseekerProfile = await Jobseeker.findOne({ userId });
-        if (!jobseekerProfile || !jobseekerProfile.resume) {
+        if (!jobseekerProfile) {
             return res.status(404).json({
                 success: false,
-                msg: 'No resume found'
+                msg: 'Jobseeker profile not found'
             });
         }
 
-        // Delete from Cloudinary
-        if (jobseekerProfile.resume.public_id) {
-            try {
-                // Try to determine resource type from stored data, fallback to auto-detection
-                const resourceType = jobseekerProfile.resume.cloudinary_info?.resource_type || 'image';
-                await cloudinary.uploader.destroy(jobseekerProfile.resume.public_id, {
-                    resource_type: resourceType
-                });
-            } catch (error) {
-                // Try with different resource type if first attempt fails
-                try {
-                    await cloudinary.uploader.destroy(jobseekerProfile.resume.public_id, {
-                        resource_type: 'raw'
-                    });
-                } catch (secondError) {
-                    console.error('Failed to delete resume from Cloudinary:', secondError.message);
-                }
-            }
+        // Delete from Cloudinary if exists
+        if (jobseekerProfile.resume && jobseekerProfile.resume.public_id) {
+            await cloudinary.uploader.destroy(jobseekerProfile.resume.public_id);
         }
 
-        // Remove from database
-        jobseekerProfile.resume = null;
+        // Clear resume details
+        jobseekerProfile.resume = undefined;
         await jobseekerProfile.save();
 
-        // Get updated user info for complete response
-        const user = await User.findById(userId).select('-password');
-
-        // Return complete profile data
-        const profileData = {
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            status: user.status,
-            profilePicture: user.profilePicture,
-            // Jobseeker profile data
-            phone: jobseekerProfile.phone,
-            location: jobseekerProfile.location,
-            jobTitle: jobseekerProfile.jobTitle,
-            summary: jobseekerProfile.summary,
-            skills: jobseekerProfile.skills,
-            experience: jobseekerProfile.experience,
-            education: jobseekerProfile.education,
-            certifications: jobseekerProfile.certifications,
-            resume: jobseekerProfile.resume, // Will be null
-            savedJobs: jobseekerProfile.savedJobs,
-            profileCompletion: jobseekerProfile.profileCompletion,
-            // Social links - NEW FORMAT ONLY
-            linkedin: jobseekerProfile.socialLinks?.linkedin,
-            github: jobseekerProfile.socialLinks?.github,
-            portfolio: jobseekerProfile.socialLinks?.portfolio,
-            socialLinks: jobseekerProfile.socialLinks
-        };
-
-        res.json({
+        res.status(200).json({
             success: true,
-            message: 'Resume deleted successfully',
-            data: {
-                profile: profileData
-            }
+            msg: 'Resume deleted successfully'
         });
-
     } catch (err) {
-        console.error('Resume delete error:', err);
+        console.error('Resume delete controller error:', err);
         res.status(500).json({
             success: false,
-            msg: 'Server Error',
-            error: err.message
+            msg: 'Failed to delete resume'
         });
     }
 };
@@ -602,10 +431,17 @@ const getResumeDetails = async (req, res) => {
         const userId = req.user.userId || req.user.id;
 
         const jobseekerProfile = await Jobseeker.findOne({ userId });
-        if (!jobseekerProfile || !jobseekerProfile.resume) {
+        if (!jobseekerProfile) {
             return res.status(404).json({
                 success: false,
-                message: 'Resume not found'
+                msg: 'Jobseeker profile not found'
+            });
+        }
+
+        if (!jobseekerProfile.resume) {
+            return res.status(404).json({
+                success: false,
+                msg: 'No resume found'
             });
         }
 
@@ -613,12 +449,9 @@ const getResumeDetails = async (req, res) => {
             success: true,
             data: jobseekerProfile.resume
         });
-    } catch (error) {
-        console.error('Get resume details error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch resume details'
-        });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
     }
 };
 
@@ -639,8 +472,9 @@ const getJobRecommendations = async (req, res) => {
         }
 
         // Build recommendation query based on user's skills and preferences
+        // Only show approved (active) jobs
         const query = {
-            status: 'active',
+            status: 'approved',
             $or: []
         };
 
@@ -699,6 +533,7 @@ const getDashboardData = async (req, res) => {
         const jobseekerProfile = await Jobseeker.findOne({ userId })
             .populate({
                 path: 'savedJobs',
+                match: { status: 'approved' }, // Only show active saved jobs
                 select: 'title company location ctc jobType createdAt',
                 options: { limit: 5, sort: { createdAt: -1 } }
             });
@@ -710,13 +545,17 @@ const getDashboardData = async (req, res) => {
             interviews,
             notifications
         ] = await Promise.all([
-            // Get all applications with job details
+            // Get all applications with job details for active jobs only
             Application.find({ applicant: userId })
-                .populate('job', 'title company location ctc jobType status')
+                .populate({
+                    path: 'job',
+                    match: { status: 'approved' },
+                    select: 'title company location ctc jobType status'
+                })
                 .sort({ createdAt: -1 })
                 .limit(10),
 
-            // Get job recommendations based on profile skills
+            // Get job recommendations based on profile skills (only active jobs)
             Job.find({
                 status: 'approved',
                 skills: { $in: jobseekerProfile?.skills || [] }
@@ -743,20 +582,23 @@ const getDashboardData = async (req, res) => {
                 .limit(5)
         ]);
 
+        // Filter out applications where the job is null (inactive jobs)
+        const activeApplications = applications.filter(app => app.job !== null);
+
         // Calculate stats from fetched data (no additional DB queries)
         const stats = {
-            totalApplications: applications.length,
-            pendingApplications: applications.filter(app => app.status === 'pending').length,
-            interviewApplications: applications.filter(app =>
+            totalApplications: activeApplications.length,
+            pendingApplications: activeApplications.filter(app => app.status === 'pending').length,
+            interviewApplications: activeApplications.filter(app =>
                 ['interview_scheduled', 'interview_completed'].includes(app.status)
             ).length,
-            rejectedApplications: applications.filter(app => app.status === 'rejected').length,
-            acceptedApplications: applications.filter(app => app.status === 'accepted').length,
+            rejectedApplications: activeApplications.filter(app => app.status === 'rejected').length,
+            acceptedApplications: activeApplications.filter(app => app.status === 'accepted').length,
             savedJobs: jobseekerProfile?.savedJobs?.length || 0,
             upcomingInterviews: interviews.length,
             unreadNotifications: notifications.length,
             profileCompleteness: calculateProfileCompleteness(jobseekerProfile),
-            recentApplications: applications.filter(app => {
+            recentApplications: activeApplications.filter(app => {
                 const dayAgo = new Date();
                 dayAgo.setDate(dayAgo.getDate() - 7); // Last 7 days
                 return new Date(app.createdAt) > dayAgo;
@@ -767,7 +609,7 @@ const getDashboardData = async (req, res) => {
         const dashboardData = {
             profile: jobseekerProfile,
             stats,
-            recentApplications: applications.slice(0, 5),
+            recentApplications: activeApplications.slice(0, 5),
             savedJobs: jobseekerProfile?.savedJobs || [],
             jobRecommendations: jobRecommendations.slice(0, 5),
             upcomingInterviews: interviews,
@@ -815,18 +657,25 @@ const getInterviewSchedule = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
 
-        // Get applications with interview status
+        // Get applications with interview status for active jobs only
         const interviews = await Application.find({
             applicant: userId,
             status: { $in: ['interview_scheduled', 'interview_completed'] }
         })
-        .populate('job', 'title company location')
+        .populate({
+            path: 'job',
+            match: { status: 'approved' },
+            select: 'title company location'
+        })
         .populate('employer', 'name email')
         .sort({ updatedAt: -1 });
 
+        // Filter out interviews where the job is null (inactive jobs)
+        const activeInterviews = interviews.filter(interview => interview.job !== null);
+
         res.status(200).json({
             success: true,
-            data: interviews
+            data: activeInterviews
         });
     } catch (error) {
         console.error('Get interview schedule error:', error);
@@ -928,12 +777,12 @@ const getNotifications = async (req, res) => {
 // @access  Private
 const markNotificationAsRead = async (req, res) => {
     try {
+        const { id } = req.params;
         const userId = req.user.userId || req.user.id;
-        const notificationId = req.params.id;
 
         const notification = await Notification.findOneAndUpdate(
-            { _id: notificationId, recipient: userId },
-            { read: true, readAt: new Date() },
+            { _id: id, recipient: userId },
+            { read: true },
             { new: true }
         );
 
@@ -964,14 +813,14 @@ const markAllNotificationsAsRead = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
 
-        const result = await Notification.updateMany(
+        await Notification.updateMany(
             { recipient: userId, read: false },
-            { read: true, readAt: new Date() }
+            { read: true }
         );
 
         res.status(200).json({
             success: true,
-            message: `Marked ${result.modifiedCount} notifications as read`
+            message: 'All notifications marked as read'
         });
     } catch (error) {
         console.error('Mark all notifications as read error:', error);
@@ -982,6 +831,58 @@ const markAllNotificationsAsRead = async (req, res) => {
     }
 };
 
+// @desc    Update interview response
+// @route   PUT /api/jobseeker/interviews/:id
+// @access  Private
+const updateInterviewResponse = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { response } = req.body;
+        const userId = req.user.userId || req.user.id;
+
+        // Find the application/interview
+        const application = await Application.findOne({
+            _id: id,
+            applicant: userId
+        }).populate({
+            path: 'job',
+            match: { status: 'approved' }, // Only allow responses for active jobs
+            select: 'title company'
+        });
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                message: 'Application not found'
+            });
+        }
+
+        // Check if the job is active
+        if (!application.job) {
+            return res.status(404).json({
+                success: false,
+                message: 'Job is no longer active'
+            });
+        }
+
+        // Update the application with the interview response
+        application.interviewResponse = response;
+        await application.save();
+
+        res.status(200).json({
+            success: true,
+            data: application
+        });
+    } catch (error) {
+        console.error('Update interview response error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update interview response'
+        });
+    }
+};
+
+// Export all controller functions
 module.exports = {
     getJobseekerProfile,
     updateJobseekerProfile,
@@ -998,5 +899,6 @@ module.exports = {
     getJobseekerStats,
     getNotifications,
     markNotificationAsRead,
-    markAllNotificationsAsRead
+    markAllNotificationsAsRead,
+    updateInterviewResponse
 };
